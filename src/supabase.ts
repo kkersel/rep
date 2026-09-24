@@ -93,30 +93,37 @@ export async function syncTrainingData(program: Program | null, sessions: Workou
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return sessions;
   const userId = session.user.id;
-  if (program) {
-    const programResult = await supabase.from('programs').upsert({ id: program.id, user_id: userId, baseline: program.baseline, step: program.step, start_date: program.startDate, status: program.status, payload: program, updated_at: new Date().toISOString() });
-    if (programResult.error) throw programResult.error;
-    const daysResult = await supabase.from('program_days').upsert(program.days.map(day => ({
-      program_id: program.id,
-      day_index: day.index,
-      user_id: userId,
-      workout_date: day.date,
-      kind: day.kind,
-      level: day.level,
-      target: day.target,
-      status: day.status,
-      actual_reps: day.actualReps ?? null,
-      completed_at: day.completedAt ?? null,
-      updated_at: new Date().toISOString(),
-    })), { onConflict: 'program_id,day_index' });
-    if (daysResult.error) throw daysResult.error;
-  }
   const pending = sessions.filter(item => !item.synced);
-  if (!pending.length) return sessions;
-  const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
-  if (result.error) throw result.error;
-  const ids = new Set(pending.map(item => item.id));
-  return sessions.map(item => ids.has(item.id) ? { ...item, synced: true } : item);
+  let nextSessions = sessions;
+  if (pending.length) {
+    const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
+    if (result.error) throw result.error;
+    const ids = new Set(pending.map(item => item.id));
+    nextSessions = sessions.map(item => ids.has(item.id) ? { ...item, synced: true } : item);
+  }
+  if (program) {
+    try {
+      const programResult = await supabase.from('programs').upsert({ id: program.id, user_id: userId, baseline: program.baseline, step: program.step, start_date: program.startDate, status: program.status, payload: program, updated_at: new Date().toISOString() });
+      if (programResult.error) throw programResult.error;
+      const daysResult = await supabase.from('program_days').upsert(program.days.map(day => ({
+        program_id: program.id,
+        day_index: day.index,
+        user_id: userId,
+        workout_date: day.date,
+        kind: day.kind,
+        level: day.level,
+        target: day.target,
+        status: day.status,
+        actual_reps: day.actualReps ?? null,
+        completed_at: day.completedAt ?? null,
+        updated_at: new Date().toISOString(),
+      })), { onConflict: 'program_id,day_index' });
+      if (daysResult.error) throw daysResult.error;
+    } catch {
+      // Session results must still reach the leaderboard if program sync needs a retry.
+    }
+  }
+  return nextSessions;
 }
 
 export async function fetchFriendLeaderboard(): Promise<FriendLeader[]> {

@@ -18,3 +18,10 @@ test('legacy history migrates without losing repetitions or duration', () => {
   assert.equal(result.reduce((sum, item) => sum + (item?.reps ?? 0), 0), 20);
   assert.equal(result.reduce((sum, item) => sum + (item?.seconds ?? 0), 0), 97);
 });
+
+test('current sessions keep sync and program metadata', () => {
+  const result = migrateSessionValue({ id: 'p', date: '2026-09-24T10:00:00.000Z', reps: 46, seconds: 60, goal: 0, mode: 'pvp', pvpResult: 'win', programDay: 4, synced: true });
+  assert.equal(result?.pvpResult, 'win');
+  assert.equal(result?.programDay, 4);
+  assert.equal(result?.synced, true);
+});
