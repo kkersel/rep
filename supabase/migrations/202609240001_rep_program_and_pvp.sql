@@ -83,7 +83,7 @@ begin
   allowed_gap:=case when coalesce(wait_seconds,0)>=30 then 10000 else 5+5*floor(coalesce(wait_seconds,0)/10)::int end;
   select * into candidate from public.matchmaking_queue where user_id<>p_user and abs(best_60s-p_best)<=allowed_gap order by joined_at for update skip locked limit 1;
   if candidate.user_id is null then insert into public.matchmaking_queue(user_id,nickname,best_60s) values(p_user,p_nickname,p_best) on conflict(user_id) do update set nickname=excluded.nickname,best_60s=excluded.best_60s; return null; end if;
-  insert into public.matches(code,kind) values(upper(substr(encode(gen_random_bytes(6),'hex'),1,6)),'random') returning id into new_match;
+  insert into public.matches(code,kind) values(upper(substr(md5(gen_random_uuid()::text),1,6)),'random') returning id into new_match;
   insert into public.match_players(match_id,user_id,seat,nickname) values(new_match,candidate.user_id,1,candidate.nickname),(new_match,p_user,2,p_nickname);
   delete from public.matchmaking_queue where user_id in(candidate.user_id,p_user); return new_match;
 end $$;
