@@ -14,6 +14,9 @@ export default function RootLayout() {
     <Stack.Screen name="program" options={{ title: 'Программа', presentation: 'card' }}/>
     <Stack.Screen name="session" options={{ headerShown: false, gestureEnabled: false }}/>
     <Stack.Screen name="history" options={{ title: 'История' }}/>
+    <Stack.Screen name="statistics" options={{ title: 'Статистика' }}/>
+    <Stack.Screen name="achievements" options={{ title: 'Достижения' }}/>
+    <Stack.Screen name="settings" options={{ title: 'Настройки' }}/>
     <Stack.Screen name="pvp/index" options={{ title: 'PvP' }}/>
     <Stack.Screen name="pvp/match" options={{ headerShown: false, gestureEnabled: false }}/>
   </Stack></AppProvider></SafeAreaProvider>;

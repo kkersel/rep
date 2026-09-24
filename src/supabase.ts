@@ -13,7 +13,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured ? createClie
   realtime: { params: { eventsPerSecond: 12 } },
 }) : null;
 
-export type PvpState = 'waiting' | 'countdown' | 'active' | 'finished' | 'cancelled';
+export type PvpState = 'searching' | 'waiting' | 'connecting' | 'camera_ready' | 'countdown' | 'active' | 'finalizing' | 'finished' | 'cancelled';
 export type PvpParticipant = { userId: string; nickname: string; score: number; ready: boolean; connected: boolean };
 export type PvpMatch = {
   id: string;
@@ -25,8 +25,8 @@ export type PvpMatch = {
   winnerId: string | null;
 };
 
-type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'status' | 'ready' | 'checkpoint' | 'leave' | 'finalize' | 'rematch' | 'add_friend';
-export type FriendLeader = { userId: string; nickname: string; wins: number; reps: number };
+type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'status' | 'ready' | 'checkpoint' | 'heartbeat' | 'leave' | 'finalize' | 'rematch' | 'request_rematch' | 'accept_rematch' | 'decline_rematch' | 'add_friend' | 'add_friend_code';
+export type FriendLeader = { userId: string; nickname: string; wins: number; reps: number; matches: number; best60: number; mainCompleted: number; adherence: number; streak: number };
 
 export async function ensureGuest(nickname: string) {
   if (!supabase) return { userId: 'demo-user', friendCode: 'DEMO01' };
@@ -141,19 +141,22 @@ export async function fetchFriendLeaderboard(): Promise<FriendLeader[]> {
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekday).toISOString();
   const [profilesResult, sessionsResult] = await Promise.all([
     supabase.from('profiles').select('user_id,nickname').in('user_id', userIds),
-    supabase.from('workout_sessions').select('user_id,reps,pvp_result').in('user_id', userIds).gte('performed_at', weekStart),
+    supabase.from('workout_sessions').select('user_id,reps,goal,mode,pvp_result,performed_at').in('user_id', userIds).gte('performed_at', weekStart),
   ]);
   if (profilesResult.error) throw profilesResult.error;
   if (sessionsResult.error) throw sessionsResult.error;
-  const totals = new Map<string, { wins: number; reps: number }>();
-  for (const id of userIds) totals.set(id, { wins: 0, reps: 0 });
+  const totals = new Map<string, Omit<FriendLeader,'userId'|'nickname'>>();
+  for (const id of userIds) totals.set(id, { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 });
   for (const item of sessionsResult.data ?? []) {
-    const total = totals.get(item.user_id) ?? { wins: 0, reps: 0 };
+    const total = totals.get(item.user_id) ?? { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 };
     total.reps += item.reps;
-    if (item.pvp_result === 'win') total.wins += 1;
+    if (item.mode === 'pvp') { total.matches += 1; total.best60 = Math.max(total.best60,item.reps); if (item.pvp_result === 'win') total.wins += 1; }
+    if (item.mode === 'program' && item.reps >= item.goal) total.mainCompleted += 1;
+    total.adherence = Math.min(100,Math.round(total.mainCompleted/3*100));
+    total.streak = total.mainCompleted;
     totals.set(item.user_id, total);
   }
-  return (profilesResult.data ?? []).map(item => ({ userId: item.user_id, nickname: item.nickname, ...(totals.get(item.user_id) ?? { wins: 0, reps: 0 }) }))
+  return (profilesResult.data ?? []).map(item => ({ userId: item.user_id, nickname: item.nickname, ...(totals.get(item.user_id) ?? { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 }) }))
     .sort((a, b) => b.wins - a.wins || b.reps - a.reps || a.nickname.localeCompare(b.nickname, 'ru'));
 }
 

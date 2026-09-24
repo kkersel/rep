@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { loadSnapshot, saveHistory, saveProfile, saveProgram, startFreshProgram, type LocalProfile, type WorkoutSession } from '../data';
+import { clearLocalData, defaultPreferences, loadSnapshot, saveHistory, saveProfile, saveProgram, startFreshProgram, type LocalProfile, type WorkoutSession } from '../data';
+import { gamificationSummary } from '../gamification';
 import { localDateKey, recordProgramWorkout, type Program } from '../program';
 import { fetchFriendLeaderboard, isSupabaseConfigured, syncTrainingData, type FriendLeader } from '../supabase';
 
@@ -11,11 +12,13 @@ type AppContextValue = {
   suggestedBaseline: number;
   error: string;
   leaders: FriendLeader[];
+  gamification: ReturnType<typeof gamificationSummary>;
   refreshLeaders: () => Promise<void>;
   createProgram: (baseline: number) => Promise<void>;
   restartProgram: (baseline: number) => Promise<void>;
   recordSession: (session: WorkoutSession) => Promise<void>;
   updateProfile: (profile: LocalProfile) => Promise<void>;
+  resetData: () => Promise<void>;
   clearError: () => void;
 };
 
@@ -25,7 +28,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const [program, setProgram] = useState<Program | null>(null);
   const [history, setHistory] = useState<WorkoutSession[]>([]);
-  const [profile, setProfile] = useState<LocalProfile>({ nickname: '' });
+  const [profile, setProfile] = useState<LocalProfile>({ nickname: '', preferences: defaultPreferences });
   const [suggestedBaseline, setSuggestedBaseline] = useState(5);
   const [error, setError] = useState('');
   const [leaders, setLeaders] = useState<FriendLeader[]>([]);
@@ -68,7 +71,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const recordSession = useCallback(async (session: WorkoutSession) => {
     const nextHistory = [session, ...history.filter(item => item.id !== session.id)];
     let nextProgram = program;
-    if (program && session.mode === 'program') {
+    if (program && (session.mode === 'program' || session.mode === 'light')) {
       nextProgram = recordProgramWorkout(program, localDateKey(session.date), session.reps, session.date);
     }
     try {
@@ -87,12 +90,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfile(next);
   }, []);
 
+  const resetData = useCallback(async () => {
+    await clearLocalData();
+    setProgram(null);
+    setHistory([]);
+    setProfile({ nickname: '', preferences: defaultPreferences });
+    setLeaders([]);
+  }, []);
+
+  const gamification = useMemo(() => gamificationSummary(history, program), [history, program]);
+
   const value = useMemo<AppContextValue>(() => ({
-    loaded, program, history, profile, suggestedBaseline, error, leaders,
+    loaded, program, history, profile, suggestedBaseline, error, leaders, gamification,
     createProgram: create, restartProgram: create, recordSession, updateProfile,
-    refreshLeaders,
+    refreshLeaders, resetData,
     clearError: () => setError(''),
-  }), [loaded, program, history, profile, suggestedBaseline, error, leaders, create, recordSession, updateProfile, refreshLeaders]);
+  }), [loaded, program, history, profile, suggestedBaseline, error, leaders, gamification, create, recordSession, updateProfile, refreshLeaders, resetData]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

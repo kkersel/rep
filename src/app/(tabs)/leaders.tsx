@@ -1,24 +1,18 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { useApp } from '../../state/AppContext';
-import { Card, colors, Screen } from '../../ui';
-
-export default function LeadersScreen() {
-  const { profile, history, leaders } = useApp();
-  const now = new Date();
-  const weekday = (now.getDay() + 6) % 7;
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekday).getTime();
-  const weeklyHistory = history.filter(item => new Date(item.date).getTime() >= weekStart);
-  const localWins = weeklyHistory.filter(item => item.mode === 'pvp' && item.pvpResult === 'win').length;
-  const localReps = weeklyHistory.reduce((sum, item) => sum + item.reps, 0);
-  const rows = leaders.length ? leaders : [{ userId: profile.userId ?? 'local', nickname: profile.nickname || 'Ты', wins: localWins, reps: localReps }];
-  return <Screen>
-    <Card style={s.list}>{rows.map((item, index) => <View key={item.userId} style={[s.row, index > 0 && s.line]}>
-      <Text style={s.rank}>{index + 1}</Text><View style={s.avatar}><Text style={s.avatarText}>{item.nickname.slice(0, 2).toUpperCase()}</Text></View>
-      <View style={s.info}><Text style={s.name}>{item.nickname}{item.nickname !== 'Ты' && (item.userId === profile.userId || item.userId === 'local') ? ' · ты' : ''}</Text><Text style={s.detail}>{item.reps} повторений за неделю</Text></View>
-      <View style={s.result}><Text style={s.score}>{item.wins}</Text><Text style={s.wins}>побед</Text></View>
-    </View>)}</Card>
-    {leaders.length <= 1 ? <View style={s.empty}><Text style={s.emptyTitle}>Добавь соперника</Text><Text style={s.emptyCopy}>После PvP он появится здесь. Места считаются по победам за неделю, затем по повторам.</Text></View> : null}
-  </Screen>;
+import React,{useState}from'react';
+import{StyleSheet,Text,TextInput,View}from'react-native';
+import{useApp}from'../../state/AppContext';
+import{invokePvp,isSupabaseConfigured}from'../../supabase';
+import{Card,colors,PrimaryButton,Screen,Segmented}from'../../ui';
+type Board='pvp'|'program';
+export default function LeadersScreen(){
+ const{profile,history,leaders,refreshLeaders}=useApp(),[board,setBoard]=useState<Board>('pvp'),[code,setCode]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ const now=new Date(),weekday=(now.getDay()+6)%7,weekStart=new Date(now.getFullYear(),now.getMonth(),now.getDate()-weekday).getTime();
+ const weekly=history.filter(item=>+new Date(item.date)>=weekStart),local={userId:profile.userId??'local',nickname:profile.nickname||'Ты',wins:weekly.filter(i=>i.mode==='pvp'&&i.pvpResult==='win').length,reps:weekly.reduce((s,i)=>s+i.reps,0),matches:weekly.filter(i=>i.mode==='pvp').length,best60:weekly.filter(i=>i.mode==='pvp').reduce((b,i)=>Math.max(b,i.reps),0),mainCompleted:weekly.filter(i=>i.mode==='program'&&i.reps>=i.goal).length,adherence:Math.round(weekly.filter(i=>i.mode==='program'&&i.reps>=i.goal).length/3*100),streak:0};
+ const source=leaders.length?leaders:[local],rows=[...source].sort(board==='pvp'?(a,b)=>b.wins-a.wins||b.matches-a.matches||b.best60-a.best60:(a,b)=>b.mainCompleted-a.mainCompleted||b.adherence-a.adherence||b.streak-a.streak);
+ const add=async()=>{if(code.trim().length!==6)return;setBusy(true);setMessage('');try{await invokePvp('add_friend_code',{code:code.trim().toUpperCase()});setMessage('Друг добавлен');setCode('');await refreshLeaders()}catch(e){setMessage(e instanceof Error?e.message:'Не удалось добавить')}finally{setBusy(false)}};
+ return <Screen><Segmented value={board} onChange={setBoard} options={[{value:'pvp',label:'PvP'},{value:'program',label:'Программа'}]}/>
+  <Card style={s.list}>{rows.map((item,index)=><View key={item.userId} style={[s.row,index>0&&s.line]}><Text style={s.rank}>{index+1}</Text><View style={s.avatar}><Text style={s.avatarText}>{item.nickname.slice(0,2).toUpperCase()}</Text></View><View style={s.info}><Text style={s.name}>{item.nickname}{item.userId===profile.userId||item.userId==='local'?' · ты':''}</Text><Text style={s.detail}>{board==='pvp'?`${item.matches} матчей · рекорд ${item.best60}`:`${item.adherence}% плана · серия ${item.streak}`}</Text></View><View style={s.result}><Text style={s.score}>{board==='pvp'?item.wins:item.mainCompleted}</Text><Text style={s.unit}>{board==='pvp'?'побед':'основных'}</Text></View></View>)}</Card>
+  <Card style={s.add}><Text style={s.addTitle}>Добавить друга</Text><TextInput value={code} onChangeText={value=>setCode(value.replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,6))} placeholder="КОД" placeholderTextColor={colors.tertiary} autoCapitalize="characters" style={s.input}/><PrimaryButton title={busy?'Добавляем…':'Добавить'} disabled={busy||code.length!==6||!isSupabaseConfigured} tone="plain" onPress={()=>void add()}/>{message?<Text style={s.message}>{message}</Text>:null}</Card>
+ </Screen>
 }
-const s=StyleSheet.create({list:{paddingVertical:2,marginTop:6},row:{minHeight:78,flexDirection:'row',alignItems:'center'},line:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:colors.line},rank:{width:28,fontSize:15,fontWeight:'700',color:colors.secondary},avatar:{width:44,height:44,borderRadius:15,backgroundColor:colors.blueSoft,alignItems:'center',justifyContent:'center'},avatarText:{color:colors.blue,fontWeight:'800'},info:{flex:1,marginLeft:12},name:{fontSize:16,fontWeight:'700'},detail:{fontSize:12,color:colors.secondary,marginTop:3},result:{alignItems:'flex-end'},score:{fontSize:28,fontWeight:'800'},wins:{fontSize:10,color:colors.secondary},empty:{alignItems:'center',paddingHorizontal:40,paddingTop:150},emptyTitle:{fontSize:22,fontWeight:'700'},emptyCopy:{fontSize:15,lineHeight:21,color:colors.secondary,textAlign:'center',marginTop:8}});
+const s=StyleSheet.create({list:{paddingVertical:2},row:{minHeight:78,flexDirection:'row',alignItems:'center'},line:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:colors.line},rank:{width:28,fontSize:15,fontWeight:'700',color:colors.secondary},avatar:{width:44,height:44,borderRadius:15,backgroundColor:colors.blueSoft,alignItems:'center',justifyContent:'center'},avatarText:{color:colors.blue,fontWeight:'800'},info:{flex:1,marginLeft:12},name:{fontSize:16,fontWeight:'700'},detail:{fontSize:11,color:colors.secondary,marginTop:3},result:{alignItems:'flex-end'},score:{fontSize:28,fontWeight:'800'},unit:{fontSize:9,color:colors.secondary},add:{marginTop:18},addTitle:{fontSize:16,fontWeight:'700'},input:{height:52,borderBottomWidth:StyleSheet.hairlineWidth,borderBottomColor:colors.line,fontSize:23,fontWeight:'800',letterSpacing:6,textAlign:'center',marginVertical:8},message:{fontSize:12,color:colors.secondary,textAlign:'center',marginTop:8}});

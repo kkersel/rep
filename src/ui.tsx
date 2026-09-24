@@ -25,6 +25,16 @@ export function PrimaryButton({ title, onPress, disabled = false, tone = 'blue' 
 
 export function Loading() { return <View style={styles.loading}><ActivityIndicator color={colors.blue}/></View>; }
 export function SectionLabel({ children }: { children: React.ReactNode }) { return <Text style={styles.section}>{children}</Text>; }
+export function ProgressBar({ value, color = colors.blue }: { value: number; color?: string }) {
+  return <View style={styles.progress}><View style={[styles.progressFill, { width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }]}/></View>;
+}
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (value: T) => void }) {
+  return <View style={styles.segmented}>{options.map(option => <Pressable key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, option.value === value && styles.segmentActive]}><Text style={[styles.segmentText, option.value === value && styles.segmentTextActive]}>{option.label}</Text></Pressable>)}</View>;
+}
+export function ListRow({ title, detail, onPress, destructive = false }: { title: string; detail?: string; onPress?: () => void; destructive?: boolean }) {
+  const content = <><View style={{ flex: 1 }}><Text style={[styles.rowTitle, destructive && { color: colors.red }]}>{title}</Text>{detail ? <Text style={styles.rowDetail}>{detail}</Text> : null}</View>{onPress ? <Text style={styles.chevron}>›</Text> : null}</>;
+  return onPress ? <Pressable onPress={onPress} style={styles.listRow}>{content}</Pressable> : <View style={styles.listRow}>{content}</View>;
+}
 
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
@@ -35,4 +45,15 @@ export const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   section: { color: colors.secondary, fontSize: 15, fontWeight: '700', marginTop: 26, marginBottom: 10, marginLeft: 4 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  progress: { height: 7, borderRadius: 4, overflow: 'hidden', backgroundColor: '#E5E5EA' },
+  progressFill: { height: 7, borderRadius: 4 },
+  segmented: { flexDirection: 'row', backgroundColor: '#E3E3E8', borderRadius: 12, padding: 3, marginBottom: 16 },
+  segment: { flex: 1, minHeight: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  segmentActive: { backgroundColor: '#fff' },
+  segmentText: { fontSize: 13, color: colors.secondary, fontWeight: '600' },
+  segmentTextActive: { color: colors.text },
+  listRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line },
+  rowTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+  rowDetail: { fontSize: 12, color: colors.secondary, marginTop: 3 },
+  chevron: { fontSize: 26, color: colors.tertiary, marginLeft: 12 },
 });

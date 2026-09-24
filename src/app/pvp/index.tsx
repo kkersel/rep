@@ -32,7 +32,7 @@ export default function PvpStartScreen() {
     setBusy(action); setError('');
     try {
       const guest = await ensureGuest(cleanNickname);
-      await updateProfile({ nickname: cleanNickname, userId: guest.userId, friendCode: guest.friendCode });
+      await updateProfile({ ...profile, nickname: cleanNickname, userId: guest.userId, friendCode: guest.friendCode });
       if (!isSupabaseConfigured) {
         router.push({ pathname: '/pvp/match', params: { demo: '1', nickname: cleanNickname, opponent: action === 'queue_random' ? 'Случайный игрок' : 'Друг', code: action === 'create_private' ? 'DEMO01' : '' } });
         return;
