@@ -50,6 +50,31 @@ export async function invokePvp(action: PvpAction, payload: Record<string, unkno
   return response.data as { match?: PvpMatch; matchId?: string; code?: string; queued?: boolean; participants?: { user_id: string; nickname: string; score: number }[] };
 }
 
+export async function fetchPvpMatch(matchId: string): Promise<PvpMatch> {
+  if (!supabase) throw new Error('PvP-сервер ещё не подключён');
+  const [matchResult, playersResult] = await Promise.all([
+    supabase.from('matches').select('id,code,state,start_at,ends_at,winner_id').eq('id', matchId).single(),
+    supabase.from('match_players').select('user_id,nickname,score,ready,connected').eq('match_id', matchId).order('seat'),
+  ]);
+  if (matchResult.error) throw matchResult.error;
+  if (playersResult.error) throw playersResult.error;
+  return {
+    id: matchResult.data.id,
+    code: matchResult.data.code,
+    state: matchResult.data.state,
+    startAt: matchResult.data.start_at,
+    endsAt: matchResult.data.ends_at,
+    winnerId: matchResult.data.winner_id,
+    participants: (playersResult.data ?? []).map(item => ({
+      userId: item.user_id,
+      nickname: item.nickname,
+      score: item.score,
+      ready: item.ready,
+      connected: item.connected,
+    })),
+  };
+}
+
 export function subscribeToMatch(matchId: string, onEvent: (event: string, payload: any) => void): RealtimeChannel | null {
   if (!supabase) return null;
   const channel = supabase.channel(`match:${matchId}`, { config: { private: true, presence: { key: matchId } } });
