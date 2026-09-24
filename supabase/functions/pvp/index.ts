@@ -19,7 +19,7 @@ Deno.serve(async req=>{
   if(action==='join_private'){
    const room=(await db.from('matches').select('*').eq('code',String(body.code??'').toUpperCase()).eq('state','waiting').gt('expires_at',new Date().toISOString()).single()).data;if(!room)return json({error:'Комната не найдена'},404);
    const occupiedResult=checked(await db.from('match_players').select('user_id').eq('match_id',room.id)),occupied=occupiedResult.data??[];if(occupied.some(player=>player.user_id===user.id))return json({error:'Вы уже в этой комнате'},409);if(occupied.length>=2)return json({error:'Комната заполнена'},409);
-   checked(await db.from('match_players').insert({match_id:room.id,user_id:user.id,seat:2,nickname:profile.nickname}));return json({matchId:room.id,code:room.code,match:room});
+   checked(await db.from('match_players').insert({match_id:room.id,user_id:user.id,seat:2,nickname:profile.nickname}));const start=new Date(Date.now()+8000),end=new Date(start.getTime()+60000);const match=checked(await db.from('matches').update({state:'countdown',start_at:start.toISOString(),ends_at:end.toISOString()}).eq('id',room.id).eq('state','waiting').select().single()).data;return json({matchId:room.id,code:room.code,match:{...match,startAt:match?.start_at,endsAt:match?.ends_at}});
   }
   if(action==='queue_random'){
    const recent=(await db.from('match_players').select('match_id').eq('user_id',user.id).gte('updated_at',new Date(Date.now()-20*60*1000).toISOString()).order('updated_at',{ascending:false}).limit(8)).data??[];
@@ -28,6 +28,9 @@ Deno.serve(async req=>{
   }
   if(action==='cancel_queue'){await db.from('matchmaking_queue').delete().eq('user_id',user.id);return json({ok:true});}
   const matchId=String(body.matchId??'');const membership=(await db.from('match_players').select('*').eq('match_id',matchId).eq('user_id',user.id).single()).data;if(!membership)return json({error:'not a participant'},403);
+  if(action==='status'){
+   const match=(await db.from('matches').select('*').eq('id',matchId).single()).data,players=(await db.from('match_players').select('*').eq('match_id',matchId).order('seat')).data??[];return json({match:{...match,participants:players,startAt:match?.start_at,endsAt:match?.ends_at}});
+  }
   if(action==='add_friend'){
    const other=(await db.from('match_players').select('user_id').eq('match_id',matchId).neq('user_id',user.id).maybeSingle()).data;if(!other)return json({error:'opponent not found'},404);
    const requester=user.id<other.user_id?user.id:other.user_id,addressee=user.id<other.user_id?other.user_id:user.id;
@@ -40,7 +43,7 @@ Deno.serve(async req=>{
   }
   if(action==='ready'){
    checked(await db.from('match_players').update({ready:true,updated_at:new Date().toISOString()}).eq('match_id',matchId).eq('user_id',user.id));const players=checked(await db.from('match_players').select('*').eq('match_id',matchId)).data??[];
-   if(players.length===2&&players.every(p=>p.ready)){const start=new Date(Date.now()+3500),end=new Date(start.getTime()+60000);checked(await db.from('matches').update({state:'countdown',start_at:start.toISOString(),ends_at:end.toISOString()}).eq('id',matchId).eq('state','waiting'));}
+   if(players.length===2){const start=new Date(Date.now()+8000),end=new Date(start.getTime()+60000);checked(await db.from('matches').update({state:'countdown',start_at:start.toISOString(),ends_at:end.toISOString()}).eq('id',matchId).eq('state','waiting'));}
    const match=(await db.from('matches').select('*').eq('id',matchId).single()).data;return json({match:{...match,participants:players,startAt:match?.start_at,endsAt:match?.ends_at}});
   }
   if(action==='checkpoint'){

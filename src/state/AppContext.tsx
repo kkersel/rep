@@ -40,7 +40,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured || !profile.userId || !program || !history.some(item => !item.synced)) return;
+    if (!isSupabaseConfigured || !profile.userId || !history.some(item => !item.synced)) return;
     const timer = setTimeout(() => { void syncTrainingData(program, history).then(next => { setHistory(next); return saveHistory(next); }).catch(() => {}); }, 500);
     return () => clearTimeout(timer);
   }, [program, history, profile.userId]);

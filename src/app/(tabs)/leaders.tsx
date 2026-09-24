@@ -5,8 +5,12 @@ import { Card, colors, Screen } from '../../ui';
 
 export default function LeadersScreen() {
   const { profile, history, leaders } = useApp();
-  const localWins = history.filter(item => item.mode === 'pvp' && item.pvpResult === 'win').length;
-  const localReps = history.reduce((sum, item) => sum + item.reps, 0);
+  const now = new Date();
+  const weekday = (now.getDay() + 6) % 7;
+  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekday).getTime();
+  const weeklyHistory = history.filter(item => new Date(item.date).getTime() >= weekStart);
+  const localWins = weeklyHistory.filter(item => item.mode === 'pvp' && item.pvpResult === 'win').length;
+  const localReps = weeklyHistory.reduce((sum, item) => sum + item.reps, 0);
   const rows = leaders.length ? leaders : [{ userId: profile.userId ?? 'local', nickname: profile.nickname || 'Ты', wins: localWins, reps: localReps }];
   return <Screen>
     <Card style={s.list}>{rows.map((item, index) => <View key={item.userId} style={[s.row, index > 0 && s.line]}>

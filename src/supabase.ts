@@ -25,7 +25,7 @@ export type PvpMatch = {
   winnerId: string | null;
 };
 
-type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'ready' | 'checkpoint' | 'leave' | 'finalize' | 'rematch' | 'add_friend';
+type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'status' | 'ready' | 'checkpoint' | 'leave' | 'finalize' | 'rematch' | 'add_friend';
 export type FriendLeader = { userId: string; nickname: string; wins: number; reps: number };
 
 export async function ensureGuest(nickname: string) {
@@ -64,26 +64,28 @@ export function subscribeToMatch(matchId: string, onEvent: (event: string, paylo
 }
 
 export async function syncTrainingData(program: Program | null, sessions: WorkoutSession[]) {
-  if (!supabase || !program) return sessions;
+  if (!supabase) return sessions;
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) return sessions;
   const userId = session.user.id;
-  const programResult = await supabase.from('programs').upsert({ id: program.id, user_id: userId, baseline: program.baseline, step: program.step, start_date: program.startDate, status: program.status, payload: program, updated_at: new Date().toISOString() });
-  if (programResult.error) throw programResult.error;
-  const daysResult = await supabase.from('program_days').upsert(program.days.map(day => ({
-    program_id: program.id,
-    day_index: day.index,
-    user_id: userId,
-    workout_date: day.date,
-    kind: day.kind,
-    level: day.level,
-    target: day.target,
-    status: day.status,
-    actual_reps: day.actualReps ?? null,
-    completed_at: day.completedAt ?? null,
-    updated_at: new Date().toISOString(),
-  })), { onConflict: 'program_id,day_index' });
-  if (daysResult.error) throw daysResult.error;
+  if (program) {
+    const programResult = await supabase.from('programs').upsert({ id: program.id, user_id: userId, baseline: program.baseline, step: program.step, start_date: program.startDate, status: program.status, payload: program, updated_at: new Date().toISOString() });
+    if (programResult.error) throw programResult.error;
+    const daysResult = await supabase.from('program_days').upsert(program.days.map(day => ({
+      program_id: program.id,
+      day_index: day.index,
+      user_id: userId,
+      workout_date: day.date,
+      kind: day.kind,
+      level: day.level,
+      target: day.target,
+      status: day.status,
+      actual_reps: day.actualReps ?? null,
+      completed_at: day.completedAt ?? null,
+      updated_at: new Date().toISOString(),
+    })), { onConflict: 'program_id,day_index' });
+    if (daysResult.error) throw daysResult.error;
+  }
   const pending = sessions.filter(item => !item.synced);
   if (!pending.length) return sessions;
   const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
