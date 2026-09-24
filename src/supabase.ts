@@ -96,7 +96,7 @@ export async function syncTrainingData(program: Program | null, sessions: Workou
   const pending = sessions.filter(item => !item.synced);
   let nextSessions = sessions;
   if (pending.length) {
-    const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
+    const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.mode === 'pvp' ? `${item.id}:${userId}` : item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
     if (result.error) throw result.error;
     const ids = new Set(pending.map(item => item.id));
     nextSessions = sessions.map(item => ids.has(item.id) ? { ...item, synced: true } : item);

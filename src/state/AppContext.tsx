@@ -47,8 +47,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshLeaders = useCallback(async () => {
     if (!isSupabaseConfigured || !profile.userId) return;
-    try { setLeaders(await fetchFriendLeaderboard()); } catch { /* Keep the last successful list offline. */ }
-  }, [profile.userId]);
+    try {
+      const retrySessions = history.map(item => item.mode === 'pvp' ? { ...item, synced: false } : item);
+      await syncTrainingData(program, retrySessions);
+      setLeaders(await fetchFriendLeaderboard());
+    } catch { /* Keep the last successful list offline. */ }
+  }, [profile.userId, history, program]);
 
   useEffect(() => {
     const timer = setTimeout(() => { void refreshLeaders(); }, 0);
