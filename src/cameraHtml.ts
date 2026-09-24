@@ -20,7 +20,7 @@ try {
  detector=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.4,minTrackingConfidence:.4});
  if(stopped) {detector.close();} else {
  if(testVideoUrl){
-  video.autoplay=false; video.src=testVideoUrl; video.loop=false; video.muted=true;
+  video.autoplay=false; video.src=testVideoUrl; video.loop=true; video.muted=true;
   await new Promise((resolve,reject)=>{video.addEventListener('loadeddata',resolve,{once:true});video.addEventListener('error',reject,{once:true});video.load();});
   video.addEventListener('ended',()=>{traceNode.textContent='POSE_TRACE '+JSON.stringify(trace)});
   video.currentTime=0; testStarted=true; await video.play();

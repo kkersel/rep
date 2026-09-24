@@ -8,7 +8,7 @@ import { Card, colors, PrimaryButton, Screen, SectionLabel } from '../../ui';
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export default function PvpStartScreen() {
-  const params = useLocalSearchParams<{ code?: string }>();
+  const params = useLocalSearchParams<{ code?: string; testVideo?: string }>();
   const { profile, history, updateProfile } = useApp();
   const [nickname, setNickname] = useState(profile.nickname || '');
   const [code, setCode] = useState((params.code || '').slice(0, 6).toUpperCase());
@@ -23,7 +23,7 @@ export default function PvpStartScreen() {
 
   const openMatch = (matchId: string, roomCode = '') => {
     searching.current = false;
-    router.push({ pathname: '/pvp/match', params: { matchId, nickname: nickname.trim(), code: roomCode } });
+    router.push({ pathname: '/pvp/match', params: { matchId, nickname: nickname.trim(), code: roomCode, ...(params.testVideo ? { testVideo: params.testVideo } : {}) } });
   };
 
   const start = async (action: 'create_private' | 'join_private' | 'queue_random') => {
