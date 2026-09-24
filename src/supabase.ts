@@ -70,6 +70,20 @@ export async function syncTrainingData(program: Program | null, sessions: Workou
   const userId = session.user.id;
   const programResult = await supabase.from('programs').upsert({ id: program.id, user_id: userId, baseline: program.baseline, step: program.step, start_date: program.startDate, status: program.status, payload: program, updated_at: new Date().toISOString() });
   if (programResult.error) throw programResult.error;
+  const daysResult = await supabase.from('program_days').upsert(program.days.map(day => ({
+    program_id: program.id,
+    day_index: day.index,
+    user_id: userId,
+    workout_date: day.date,
+    kind: day.kind,
+    level: day.level,
+    target: day.target,
+    status: day.status,
+    actual_reps: day.actualReps ?? null,
+    completed_at: day.completedAt ?? null,
+    updated_at: new Date().toISOString(),
+  })), { onConflict: 'program_id,day_index' });
+  if (daysResult.error) throw daysResult.error;
   const pending = sessions.filter(item => !item.synced);
   if (!pending.length) return sessions;
   const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
