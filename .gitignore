@@ -6,6 +6,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-check/
 web-build/
 work/
 expo-env.d.ts
@@ -44,3 +45,4 @@ supabase/.temp/
 # generated native folders
 /ios
 /android
+.vercel

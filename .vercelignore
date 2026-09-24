@@ -1,0 +1,9 @@
+.expo/
+.git/
+.vercel/
+android/
+dist/
+dist-check/
+ios/
+node_modules/
+work/
