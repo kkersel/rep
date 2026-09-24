@@ -51,7 +51,7 @@ export default function PvpStartScreen() {
       while (searching.current) {
         const result = await invokePvp('queue_random', { best60 });
         const matchId = result.matchId ?? result.match?.id;
-        if (matchId) { openMatch(matchId, result.code ?? result.match?.code ?? ''); return; }
+        if (matchId) { openMatch(matchId); return; }
         const elapsed = Math.floor((Date.now() - startedAt) / 1000);
         setError(elapsed < 10 ? 'Ищем соперника рядом по уровню…' : elapsed < 30 ? 'Расширяем поиск…' : 'Ищем среди всех игроков…');
         await delay(2500);

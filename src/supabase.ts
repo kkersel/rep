@@ -54,7 +54,7 @@ export async function fetchPvpMatch(matchId: string): Promise<PvpMatch> {
   if (!supabase) throw new Error('PvP-сервер ещё не подключён');
   const [matchResult, playersResult] = await Promise.all([
     supabase.from('matches').select('id,code,state,start_at,ends_at,winner_id').eq('id', matchId).single(),
-    supabase.from('match_players').select('user_id,nickname,score,ready,connected').eq('match_id', matchId).order('seat'),
+    supabase.from('match_players').select('user_id,nickname,score,ready').eq('match_id', matchId).order('seat'),
   ]);
   if (matchResult.error) throw matchResult.error;
   if (playersResult.error) throw playersResult.error;
@@ -70,7 +70,7 @@ export async function fetchPvpMatch(matchId: string): Promise<PvpMatch> {
       nickname: item.nickname,
       score: item.score,
       ready: item.ready,
-      connected: item.connected,
+      connected: true,
     })),
   };
 }
