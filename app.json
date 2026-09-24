@@ -2,10 +2,11 @@
   "expo": {
     "name": "Rep — счётчик отжиманий",
     "slug": "rep",
+    "scheme": "rep",
     "version": "1.2.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rep.pushups",
@@ -34,7 +35,10 @@
           "cameraPermission": "Разрешить Rep использовать камеру для подсчёта отжиманий?",
           "recordAudioAndroid": false
         }
-      ]
+      ],
+      "expo-router",
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }

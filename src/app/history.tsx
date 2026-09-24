@@ -1,0 +1,7 @@
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { useApp } from '../state/AppContext';
+import { Card, colors, Screen } from '../ui';
+
+export default function HistoryScreen(){const{history}=useApp();return <Screen>{history.length===0?<View style={s.empty}><Text style={s.emptyTitle}>История пуста</Text><Text style={s.emptyCopy}>Сохранённые тренировки появятся здесь.</Text></View>:<Card style={s.list}>{history.map((item,i)=><View key={item.id} style={[s.row,i>0&&s.line]}><View><Text style={s.title}>{item.mode==='program'?'Программа':item.mode==='pvp'?'PvP':'Свободный'}</Text><Text style={s.date}>{new Date(item.date).toLocaleString('ru-RU',{day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'})}</Text></View><View style={s.result}><Text style={s.reps}>{item.reps}</Text><Text style={s.time}>{Math.floor(item.seconds/60).toString().padStart(2,'0')}:{(item.seconds%60).toString().padStart(2,'0')}</Text></View></View>)}</Card>}</Screen>}
+const s=StyleSheet.create({list:{paddingVertical:2},row:{minHeight:78,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},line:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:colors.line},title:{fontSize:16,fontWeight:'600'},date:{fontSize:12,color:colors.secondary,marginTop:4},result:{alignItems:'flex-end'},reps:{fontSize:28,fontWeight:'700'},time:{fontSize:12,color:colors.secondary},empty:{paddingTop:180,alignItems:'center'},emptyTitle:{fontSize:22,fontWeight:'700'},emptyCopy:{fontSize:15,color:colors.secondary,marginTop:7}});
