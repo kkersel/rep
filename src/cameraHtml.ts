@@ -10,15 +10,28 @@ const send = data => { const value=JSON.stringify(data); if(window.ReactNativeWe
 const video=document.querySelector('video'), canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
 const trace=[]; const traceNode=document.createElement('pre'); traceNode.setAttribute('aria-label','pose-trace'); traceNode.style.cssText='position:fixed;left:0;top:0;width:1px;height:1px;opacity:.01;overflow:hidden;font-size:1px'; if(testVideoUrl)document.body.append(traceNode);
 let stream, detector, stopped=false, last=0, previous=-1, testStarted=!testVideoUrl, testStable=0;
-function stop(){ stopped=true; stream?.getTracks().forEach(t=>t.stop()); detector?.close(); }
+function stop(){
+ stopped=true;
+ video.pause();
+ stream?.getTracks().forEach(t=>t.stop());
+ stream=undefined;
+ video.srcObject=null;
+ try { detector?.close(); } catch {}
+ detector=undefined;
+}
+window.__repStop=stop;
+const receiveCommand=event=>{if(event.data==='stop')stop();};
+window.addEventListener('message',receiveCommand);
+document.addEventListener('message',receiveCommand);
 window.addEventListener('pagehide',stop);
+window.addEventListener('beforeunload',stop);
 document.addEventListener('visibilitychange',()=>{ if(document.hidden) {stop();send({type:'error',message:'Камера остановлена. Открой её заново для продолжения.'});} });
 try {
- send({type:'status',message:'Загружаем распознавание…'});
+ send({type:'status',message:'Готовим счётчик…'});
  const {FilesetResolver,PoseLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/vision_bundle.mjs');
  const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm');
  detector=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'CPU'},runningMode:'VIDEO',numPoses:1,minPoseDetectionConfidence:.4,minTrackingConfidence:.4});
- if(stopped) {detector.close();} else {
+ if(stopped) {detector.close();detector=undefined;} else {
  if(testVideoUrl){
   video.autoplay=false; video.src=testVideoUrl; video.loop=true; video.muted=true;
   await new Promise((resolve,reject)=>{video.addEventListener('loadeddata',resolve,{once:true});video.addEventListener('error',reject,{once:true});video.load();});
