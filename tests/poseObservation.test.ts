@@ -1,0 +1,13 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {observePose,screenshotPose,top,bottom} from './fixtures.ts';
+test('user screenshots classify straight arms as top and bent arms as bottom',()=>{assert.ok(top().elbowAngle>=155);assert.ok(bottom().elbowAngle<=120);});
+test('aspect ratio correction preserves angles across image coordinate formats',()=>{const p=screenshotPose(true);const angle=observePose(p,597/1280).elbowAngle;const rescaled=p.map((x:any)=>({...x,x:x.x*597/1280}));assert.ok(Math.abs(observePose(rescaled,1).elbowAngle-angle)<.001);});
+test('a single visible arm can support tracking',()=>{const p=screenshotPose();p[14].visibility=.1;p[16].visibility=.1;assert.ok(observePose(p,597/1280).elbowAngle>155);});
+test('no reliable elbow measurement when both wrists are hidden',()=>{const p=screenshotPose();p[15].visibility=.1;p[16].visibility=.1;assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
+test('missing and degenerate poses do not produce valid angles',()=>{assert.equal(observePose(undefined),null);assert.equal(observePose(screenshotPose(),NaN),null);const p=screenshotPose();p[13]=p[11];p[14]=p[12];assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
+test('full floor push-up pose includes a visible leg chain',()=>{assert.equal(top().legsVisible,true);assert.equal(bottom().legsVisible,true);});
+test('one complete leg is enough in a frontal view',()=>{const p=screenshotPose();p[24].visibility=.1;p[26].visibility=.1;p[28].visibility=.1;assert.equal(observePose(p,597/1280).legsVisible,true);});
+test('an ankle without its leg chain is rejected',()=>{const p=screenshotPose();p[25].visibility=.05;p[26].visibility=.05;assert.equal(observePose(p,597/1280).legsVisible,false);});
+test('a foreshortened front-view leg accepts a faint but coherent ankle',()=>{const p=screenshotPose();p[25].visibility=.12;p[27].visibility=.08;p[26].visibility=.05;p[28].visibility=.04;assert.equal(observePose(p,597/1280).legsVisible,true);});
+test('the two screenshots show clear shoulder travel',()=>{assert.ok(bottom().y-top().y>.1);});

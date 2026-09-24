@@ -1,0 +1,26 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {RepCounter, type Observation} from '../src/counter.ts';
+import {top,bottom} from './fixtures.ts';
+function fixture(){const c=new RepCounter();let t=1000;return {c,hold(o:Observation|null,n=8){for(let i=0;i<n;i++,t+=85)c.update(o,t);},gap(){t+=600;}};}
+test('user screenshot top → bottom → top counts one',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold(top());assert.equal(f.c.count,1);});
+test('wrong initial height never locks out actual straight arms',()=>{const f=fixture();f.hold({...top(),y:.12});f.gap();f.hold(top());assert.equal(f.c.phase,'top');f.hold(bottom());f.hold(top());assert.equal(f.c.count,1);});
+test('holding top or bottom does not duplicate reps',()=>{const f=fixture();f.hold(top(),40);f.hold(bottom(),40);assert.equal(f.c.count,0);f.hold(top(),40);assert.equal(f.c.count,1);});
+test('bottom-first entry waits for a full subsequent cycle',()=>{const f=fixture();f.hold(bottom());f.hold(top());assert.equal(f.c.count,0);f.hold(bottom());f.hold(top());assert.equal(f.c.count,1);});
+test('head and shoulder bobbing with straight elbows cannot count',()=>{const f=fixture();for(let i=0;i<6;i++){f.hold({...top(),y:.3});f.hold({...top(),y:.8});}assert.equal(f.c.count,0);});
+test('long tracking loss invalidates unfinished rep but reacquires at any height',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold(null,12);f.hold({...top(),y:.8});assert.equal(f.c.count,0);f.hold({...bottom(),y:.9});f.hold({...top(),y:.8});assert.equal(f.c.count,1);});
+test('one missed frame does not discard recognized bottom',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold(null,1);f.hold(bottom(),2);f.hold(top());assert.equal(f.c.count,1);});
+test('single frame angle spike cannot count',()=>{const f=fixture();f.hold(top());for(let i=0;i<10;i++){f.hold(bottom(),1);f.hold(top(),5);}assert.equal(f.c.count,0);});
+test('smooth motion needs no pause at endpoints',()=>{const c=new RepCounter();for(let i=0;i<=65;i++){const wave=(1-Math.cos(Math.min(i,60)*2*Math.PI/60))/2;const angle=175-85*wave;c.update({...top(),elbowAngle:angle,y:top().y+.13*wave},1000+i*40);}assert.equal(c.count,1);});
+test('pausing preserves count and requires new top',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold(top());f.c.resetTracking();f.hold(bottom());f.hold(top());assert.equal(f.c.count,1);});
+test('missing legs cannot count',()=>{const f=fixture();const noLegs={...top(),legsVisible:false};f.hold(noLegs);f.hold({...bottom(),legsVisible:false});f.hold(noLegs);assert.equal(f.c.count,0);});
+test('real elbow cycle plus shoulder travel counts',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold(top());assert.equal(f.c.count,1);});
+test('brief leg landmark loss does not cancel a real repetition',()=>{const f=fixture();f.hold(top());f.hold({...bottom(),legsVisible:false},4);f.hold({...top(),legsVisible:false},4);assert.equal(f.c.count,1);});
+test('bending only the arms with stationary shoulders does not count',()=>{const f=fixture();f.hold(top());f.hold({...bottom(),y:top().y});assert.equal(f.c.needsBodyMovement,true);f.hold(top());assert.equal(f.c.count,0);});
+test('feet may disappear completely at the bottom and the rep still counts',()=>{const f=fixture();f.hold(top());f.hold({...bottom(),legsVisible:false});f.hold({...top(),legsVisible:false});assert.equal(f.c.count,1);assert.equal(f.c.needsFeet,true);});
+test('front-view feet can become visible after the top position',()=>{const f=fixture();f.hold({...top(),legsVisible:false});f.hold({...bottom(),legsVisible:true});f.hold({...top(),legsVisible:false});assert.equal(f.c.count,1);});
+test('a briefly delayed leg landmark confirms the completed cycle',()=>{const f=fixture();f.hold({...top(),legsVisible:false});f.hold({...bottom(),legsVisible:false});f.hold({...top(),legsVisible:false});f.hold({...top(),legsVisible:true},1);assert.equal(f.c.count,1);});
+test('front-view arm overlap still counts when the shoulders clearly travel',()=>{const f=fixture();f.hold(top());f.hold({...bottom(),elbowAngle:128,y:top().y+.2},4);f.hold(top());assert.equal(f.c.count,1);});
+test('perspective drift may return shoulders slightly below their starting height',()=>{const f=fixture();f.hold(top());f.hold({...bottom(),y:top().y+.25});f.hold({...top(),y:top().y+.08});assert.equal(f.c.count,1);});
+test('straight arms without lifting the shoulders from the bottom do not finish a rep',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold({...top(),y:bottom().y-.02});assert.equal(f.c.count,0);});
+test('near-full extension finishes the rep once the smoothed angle settles',()=>{const f=fixture();f.hold(top());f.hold(bottom());f.hold({...top(),elbowAngle:153},7);assert.equal(f.c.count,1);});
