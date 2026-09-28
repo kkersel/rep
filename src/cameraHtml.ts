@@ -76,11 +76,9 @@ try {
      }
      const pulse=2+Math.sin(now/140)*1.5;
      for(const i of [11,12,13,14,15,16]){if(p[i].visibility>.5){const x=p[i].x*w,y=p[i].y*h;ctx.fillStyle='#FFFFFF';ctx.shadowColor='#0A84FF';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(x,y,5+pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#0A84FF';ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,10+pulse,0,Math.PI*2);ctx.stroke();}}
-     const legChains=[[23,25,27,29,31],[24,26,28,30,32]];
-     const leg=legChains.map(ids=>{const hip=p[ids[0]],knee=p[ids[1]],ankle=p[ids[2]],length=Math.hypot((hip.x-ankle.x)*(w/h),hip.y-ankle.y);return{ids,score:(knee.visibility||0)+(ankle.visibility||0),valid:hip.visibility>=.55&&knee.visibility>=.1&&ankle.visibility>=.06&&length>.04};}).sort((a,b)=>b.score-a.score)[0];
-     if(leg&&leg.valid){
-      const ankles=[p[27],p[29],p[31],p[28],p[30],p[32]].filter(point=>point&&point.visibility>=.04);
-      const anchor=ankles.length?ankles: [p[leg.ids[2]]];
+     const ankles=[p[27],p[29],p[31],p[28],p[30],p[32]].filter(point=>point&&point.x>.005&&point.x<.995&&point.y>.005&&point.y<.995&&point.visibility>=.04);
+     if(ankles.length&&Math.max(...ankles.map(point=>point.visibility))>=.06){
+      const anchor=ankles;
       const cx=anchor.reduce((sum,point)=>sum+point.x*w,0)/anchor.length,cy=anchor.reduce((sum,point)=>sum+point.y*h,0)/anchor.length;
       const detectedSpan=ankles.length===2?Math.abs(ankles[0].x-ankles[1].x)*w:0;
       const half=Math.max(w*.09,detectedSpan*.72);const x1=Math.max(16,cx-half),x2=Math.min(w-16,cx+half);
@@ -88,11 +86,9 @@ try {
       ctx.lineCap='round';ctx.strokeStyle='rgba(9,18,15,.62)';ctx.lineWidth=15;ctx.beginPath();ctx.moveTo(x1,cy);ctx.lineTo(x2,cy);ctx.stroke();
       ctx.strokeStyle=legGlow;ctx.shadowColor='#34C759';ctx.shadowBlur=14;ctx.lineWidth=6;ctx.beginPath();ctx.moveTo(x1,cy);ctx.lineTo(x2,cy);ctx.stroke();ctx.shadowBlur=0;
       for(const x of [x1,x2]){ctx.fillStyle='#FFFFFF';ctx.shadowColor='#34C759';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(x,cy,5+pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#34C759';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,cy,10+pulse,0,Math.PI*2);ctx.stroke();}
-      const knee=p[leg.ids[1]],kx=knee.x*w,ky=knee.y*h;
-      ctx.fillStyle='#FFFFFF';ctx.shadowColor='#34C759';ctx.shadowBlur=12;ctx.beginPath();ctx.arc(kx,ky,5+pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#34C759';ctx.lineWidth=3;ctx.beginPath();ctx.arc(kx,ky,10+pulse,0,Math.PI*2);ctx.stroke();
      }
      const observation=observePose(p,w/h);
-     if(testVideoUrl){trace.push({t:+video.currentTime.toFixed(3),...observation,legPoints:[23,24,25,26,27,28,29,30,31,32].map(i=>({x:+p[i].x.toFixed(3),y:+p[i].y.toFixed(3),v:+(p[i].visibility||0).toFixed(3)}))});traceNode.textContent='POSE_TRACE '+JSON.stringify(trace);}
+     if(testVideoUrl){trace.push({t:+video.currentTime.toFixed(3),...observation,footPoints:[27,28,29,30,31,32].map(i=>({x:+p[i].x.toFixed(3),y:+p[i].y.toFixed(3),v:+(p[i].visibility||0).toFixed(3)}))});traceNode.textContent='POSE_TRACE '+JSON.stringify(trace);}
      send({type:'pose',observation});
      if(!testStarted){
       // The fixture runner only waits for a stable person/arm lock. Leg validity is

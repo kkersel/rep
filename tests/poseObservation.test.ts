@@ -6,9 +6,9 @@ test('aspect ratio correction preserves angles across image coordinate formats',
 test('a single visible arm can support tracking',()=>{const p=screenshotPose();p[14].visibility=.1;p[16].visibility=.1;assert.ok(observePose(p,597/1280).elbowAngle>155);});
 test('no reliable elbow measurement when both wrists are hidden',()=>{const p=screenshotPose();p[15].visibility=.1;p[16].visibility=.1;assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
 test('missing and degenerate poses do not produce valid angles',()=>{assert.equal(observePose(undefined),null);assert.equal(observePose(screenshotPose(),NaN),null);const p=screenshotPose();p[13]=p[11];p[14]=p[12];assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
-test('full floor push-up pose includes a visible leg chain',()=>{assert.equal(top().legsVisible,true);assert.equal(bottom().legsVisible,true);});
-test('leg chain exposes the foot support line and a straight knee',()=>{assert.ok(Number.isFinite(top().footY));assert.ok(Number.isFinite(top().kneeY));assert.ok(top().kneeAngle!>=145);assert.equal(top().legStraight,true);});
-test('one complete leg is enough in a frontal view',()=>{const p=screenshotPose();p[24].visibility=.1;p[26].visibility=.1;p[28].visibility=.1;assert.equal(observePose(p,597/1280).legsVisible,true);});
-test('an ankle without its leg chain is rejected',()=>{const p=screenshotPose();p[25].visibility=.05;p[26].visibility=.05;assert.equal(observePose(p,597/1280).legsVisible,false);});
-test('a foreshortened front-view leg accepts a faint but coherent ankle',()=>{const p=screenshotPose();p[25].visibility=.12;p[27].visibility=.08;p[26].visibility=.05;p[28].visibility=.04;assert.equal(observePose(p,597/1280).legsVisible,true);});
+test('full floor push-up pose includes a visible foot support',()=>{assert.equal(top().feetVisible,true);assert.equal(bottom().feetVisible,true);});
+test('foot landmarks expose the support line without measuring knees',()=>{assert.ok(Number.isFinite(top().footY));assert.equal('kneeAngle' in top(),false);assert.equal('kneeY' in top(),false);});
+test('one visible foot is enough in a frontal view',()=>{const p=screenshotPose();p[28].visibility=.01;assert.equal(observePose(p,597/1280).feetVisible,true);});
+test('knees never affect foot support detection',()=>{const p=screenshotPose();p[25].visibility=0;p[26].visibility=0;assert.equal(observePose(p,597/1280).feetVisible,true);});
+test('a foreshortened front-view foot accepts a faint but coherent ankle',()=>{const p=screenshotPose();p[27].visibility=.08;p[28].visibility=.04;assert.equal(observePose(p,597/1280).feetVisible,true);});
 test('the two screenshots show clear shoulder travel',()=>{assert.ok(bottom().y-top().y>.1);});

@@ -79,7 +79,7 @@ export default function PvpMatchScreen(){
    const o=event.observation,valid=!!o&&o.confidence>=.55&&Number.isFinite(o.elbowAngle)&&o.armConfidence!>=.55;
    if(phase==='camera'){
      const now=Date.now();
-     if(o?.legsVisible)lastLegSeen.current=now;
+     if(o?.feetVisible)lastLegSeen.current=now;
      const legsRecentlyVisible=now-lastLegSeen.current<=1500;
      if(valid&&legsRecentlyVisible){if(!stableSince.current)stableSince.current=now;const stable=now-stableSince.current>=800;setPoseReady(stable)}
      else{stableSince.current=0;setPoseReady(false)}

@@ -1,8 +1,8 @@
 export type Observation = {
   y: number; width: number; confidence: number;
   elbowAngle?: number; armConfidence?: number;
-  legsVisible?: boolean;
-  footY?: number; kneeY?: number; kneeAngle?: number; legStraight?: boolean;
+  feetVisible?: boolean;
+  footY?: number;
 };
 export type Phase = 'seek-top' | 'top' | 'bottom';
 
@@ -22,10 +22,8 @@ export class RepCounter {
   private topShoulderY: number | null = null;
   private bottomShoulderY: number | null = null;
   private supportFootY: number | null = null;
-  private cycleLegsSeen = false;
-  private cycleStraightLegSeen = false;
+  private cycleFeetSeen = false;
   private lastLegSeenAt = -Infinity;
-  private lastStraightLegSeenAt = -Infinity;
   private bottomReachedSupport = false;
   private downAt = 0;
   private lastRep = -Infinity;
@@ -37,9 +35,8 @@ export class RepCounter {
     this.progress = 0; this.tracking = false; this.needsBodyMovement = false;
     this.needsFeet = true;
     this.supportFootY = null;
-    this.cycleLegsSeen = false;
-    this.cycleStraightLegSeen = false; this.lastLegSeenAt = -Infinity;
-    this.lastStraightLegSeenAt = -Infinity; this.bottomReachedSupport = false;
+    this.cycleFeetSeen = false;
+    this.lastLegSeenAt = -Infinity; this.bottomReachedSupport = false;
   }
   update(o: Observation | null, time: number): boolean {
     const angle = o?.elbowAngle;
@@ -53,12 +50,11 @@ export class RepCounter {
     }
     if (this.lastSeen !== null && time - this.lastSeen > 750) this.resetTracking();
     this.lastSeen = time; this.tracking = true;
-    const legMeasured=o!.legsVisible===true&&Number.isFinite(o!.footY)&&Number.isFinite(o!.kneeAngle);
-    if (legMeasured) {
-      this.cycleLegsSeen=true; this.lastLegSeenAt=time;
+    const footMeasured=o!.feetVisible===true&&Number.isFinite(o!.footY);
+    if (footMeasured) {
+      this.cycleFeetSeen=true; this.lastLegSeenAt=time;
       this.supportFootY=this.supportFootY===null?o!.footY!:Math.max(this.supportFootY,o!.footY!);
-      if(o!.legStraight===true){this.cycleStraightLegSeen=true;this.lastStraightLegSeenAt=time}
-      this.needsFeet=o!.legStraight!==true;
+      this.needsFeet=false;
     }
     this.smoothed = this.smoothed === null ? angle! : this.smoothed * .35 + angle! * .65;
     this.progress = Math.max(0, Math.min(1, (152 - this.smoothed) / 32));
@@ -69,30 +65,28 @@ export class RepCounter {
     else this.candidateFrames++;
     if (this.candidateFrames < 2 || time - this.since < 70) return false;
     if (this.phase === 'seek-top' && zone === 'top') {
-      this.needsFeet = !legMeasured || o!.legStraight !== true;
-      this.cycleLegsSeen = legMeasured;
-      this.cycleStraightLegSeen = legMeasured && o!.legStraight === true;
-      this.lastLegSeenAt = legMeasured ? time : -Infinity;
-      this.lastStraightLegSeenAt = this.cycleStraightLegSeen ? time : -Infinity;
-      this.supportFootY = legMeasured ? o!.footY! : null;
+      this.needsFeet = !footMeasured;
+      this.cycleFeetSeen = footMeasured;
+      this.lastLegSeenAt = footMeasured ? time : -Infinity;
+      this.supportFootY = footMeasured ? o!.footY! : null;
       this.phase = 'top'; this.topShoulderY = o!.y;
       this.bottomReachedSupport=false;
     } else if (this.phase === 'top' && zone === 'top') {
-      if (legMeasured) {
+      if (footMeasured) {
         this.topShoulderY=o!.y;
       }
       this.needsBodyMovement = false;
-      this.needsFeet = !this.cycleLegsSeen || !this.cycleStraightLegSeen;
+      this.needsFeet = !this.cycleFeetSeen;
     } else if (this.phase === 'top' && zone === 'bottom') {
       const travel = o!.y - (this.topShoulderY ?? o!.y);
       const legFresh=time-this.lastLegSeenAt<=1500;
-      const straightLeg=legMeasured?o!.legStraight===true:time-this.lastStraightLegSeenAt<=1500;
       const footGap=this.supportFootY===null?Infinity:this.supportFootY-o!.y;
-      // At the accepted bottom the shoulders must be close to the foot support
-      // line in the camera image. This rejects shallow arm bends and desk poses.
+      // At the accepted bottom the shoulders must be close to the frozen foot
+      // support line. A knee-supported rep normally bottoms out at the nearer
+      // knee line instead, while an honest full-body rep reaches the feet line.
       const targetGap=.12;
-      const reachesSupport=legFresh&&straightLeg&&footGap<=targetGap;
-      this.needsFeet=!legFresh||!straightLeg;
+      const reachesSupport=legFresh&&footGap<=targetGap;
+      this.needsFeet=!legFresh;
       this.needsBodyMovement=travel<.04||!reachesSupport;
       if (!this.needsBodyMovement&&!this.needsFeet) {
         this.phase='bottom'; this.bottomShoulderY=o!.y; this.bottomReachedSupport=true; this.downAt=time;
@@ -105,7 +99,7 @@ export class RepCounter {
       if (this.bottomShoulderY !== null && this.bottomShoulderY - o!.y < .04) return false;
       this.needsBodyMovement = false;
       if (time - this.downAt < 200 || time - this.lastRep < 500) return false;
-      if (!this.cycleLegsSeen || !this.cycleStraightLegSeen || !this.bottomReachedSupport || time-this.lastLegSeenAt>1500) {
+      if (!this.cycleFeetSeen || !this.bottomReachedSupport || time-this.lastLegSeenAt>1500) {
         this.phase = 'top'; this.topShoulderY = o!.y; this.needsFeet = true;
         this.bottomReachedSupport=false;
         return false;
@@ -113,13 +107,11 @@ export class RepCounter {
       this.count++; this.lastRep = time;
       this.phase = 'top'; this.topShoulderY = o!.y;
       this.bottomShoulderY = null;
-      this.cycleLegsSeen = legMeasured;
-      this.cycleStraightLegSeen = legMeasured && o!.legStraight === true;
-      this.supportFootY = legMeasured ? o!.footY! : null;
-      this.lastLegSeenAt = legMeasured ? time : -Infinity;
-      this.lastStraightLegSeenAt = this.cycleStraightLegSeen ? time : -Infinity;
+      this.cycleFeetSeen = footMeasured;
+      this.supportFootY = footMeasured ? o!.footY! : null;
+      this.lastLegSeenAt = footMeasured ? time : -Infinity;
       this.bottomReachedSupport=false;
-      this.needsFeet = !this.cycleStraightLegSeen;
+      this.needsFeet = !this.cycleFeetSeen;
       return true;
     }
     return false;
