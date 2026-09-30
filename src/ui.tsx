@@ -1,10 +1,12 @@
 import React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { levelColor } from './gamification';
 
 export const colors = {
   bg: '#F2F2F7', card: '#FFFFFF', text: '#08090A', secondary: '#6E6E73', tertiary: '#AEAEB2',
   line: '#D1D1D6', blue: '#0A84FF', blueSoft: '#E8F3FF', green: '#30D158', orange: '#FF9F0A', red: '#FF453A',
+  win: '#248A3D', loss: '#D70015', draw: '#A66300',
 };
 
 export function Screen({ children, scroll = true, style }: { children: React.ReactNode; scroll?: boolean; style?: ViewStyle }) {
@@ -28,6 +30,12 @@ export function SectionLabel({ children }: { children: React.ReactNode }) { retu
 export function ProgressBar({ value, color = colors.blue }: { value: number; color?: string }) {
   return <View style={styles.progress}><View style={[styles.progressFill, { width: `${Math.max(0, Math.min(1, value)) * 100}%`, backgroundColor: color }]}/></View>;
 }
+export function LevelBadge({ level, size = 28 }: { level: number; size?: number }) {
+  const accent = levelColor(level);
+  return <View accessibilityLabel={`Уровень ${level}`} style={[styles.levelBadge, { width: size, height: size, borderRadius: size / 2, borderColor: accent }]}>
+    <Text style={[styles.levelBadgeText, { color: accent, fontSize: Math.max(10, size * .4), lineHeight: Math.max(12, size * .46) }]}>{level}</Text>
+  </View>;
+}
 export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: string }[]; onChange: (value: T) => void }) {
   return <View style={styles.segmented}>{options.map(option => <Pressable key={option.value} onPress={() => onChange(option.value)} style={[styles.segment, option.value === value && styles.segmentActive]}><Text style={[styles.segmentText, option.value === value && styles.segmentTextActive]}>{option.label}</Text></Pressable>)}</View>;
 }
@@ -47,6 +55,8 @@ export const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
   progress: { height: 7, borderRadius: 4, overflow: 'hidden', backgroundColor: '#E5E5EA' },
   progressFill: { height: 7, borderRadius: 4 },
+  levelBadge: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#17181D', borderWidth: 2 },
+  levelBadgeText: { fontWeight: '800' },
   segmented: { flexDirection: 'row', backgroundColor: '#E3E3E8', borderRadius: 12, padding: 3, marginBottom: 16 },
   segment: { flex: 1, minHeight: 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   segmentActive: { backgroundColor: '#fff' },

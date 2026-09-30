@@ -46,3 +46,18 @@ supabase/.temp/
 /ios
 /android
 .vercel
+/output/
+/tmp.*
+
+# Personal camera regression clips stay local. Their anonymized pose traces are
+# committed so the anti-cheat regression test remains reproducible.
+/public/test-videos/pushup-knees-user-*.mp4
+
+# Reference videos are downloaded only for local biomechanical analysis. Keep
+# copyrighted source media out of git; commit the source manifest and derived
+# anonymized metrics instead.
+/reference-data/raw/
+/reference-data/subtitles/
+/reference-data/traces/
+/reference-data/metadata.ndjson
+/.venv-reference/

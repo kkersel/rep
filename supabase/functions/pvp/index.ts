@@ -30,6 +30,11 @@ Deno.serve(async req=>{
    const requester=user.id<other.user_id?user.id:other.user_id,addressee=user.id<other.user_id?other.user_id:user.id;
    const result=await db.from('friendships').upsert({requester_id:requester,addressee_id:addressee,status:'accepted'},{onConflict:'requester_id,addressee_id'});if(result.error)throw result.error;return json({ok:true});
   }
+  if(action==='remove_friend'){
+   const friendId=String(body.friendId??'');if(!friendId||friendId===user.id)return json({error:'Некорректный пользователь'},400);
+   const requester=user.id<friendId?user.id:friendId,addressee=user.id<friendId?friendId:user.id;
+   const result=await db.from('friendships').delete().eq('requester_id',requester).eq('addressee_id',addressee);if(result.error)throw result.error;return json({ok:true});
+  }
   const matchId=String(body.matchId??'');const membership=(await db.from('match_players').select('*').eq('match_id',matchId).eq('user_id',user.id).single()).data;if(!membership)return json({error:'not a participant'},403);
   if(action==='status'){
    const match=(await db.from('matches').select('*').eq('id',matchId).single()).data,players=(await db.from('match_players').select('*').eq('match_id',matchId).order('seat')).data??[];return json({match:{...match,participants:players,startAt:match?.start_at,endsAt:match?.ends_at}});

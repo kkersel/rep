@@ -7,8 +7,9 @@ test('a single visible arm can support tracking',()=>{const p=screenshotPose();p
 test('no reliable elbow measurement when both wrists are hidden',()=>{const p=screenshotPose();p[15].visibility=.1;p[16].visibility=.1;assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
 test('missing and degenerate poses do not produce valid angles',()=>{assert.equal(observePose(undefined),null);assert.equal(observePose(screenshotPose(),NaN),null);const p=screenshotPose();p[13]=p[11];p[14]=p[12];assert.equal(observePose(p,597/1280).elbowAngle,undefined);});
 test('full floor push-up pose includes a visible foot support',()=>{assert.equal(top().feetVisible,true);assert.equal(bottom().feetVisible,true);});
-test('foot landmarks expose the support line without measuring knees',()=>{assert.ok(Number.isFinite(top().footY));assert.equal('kneeAngle' in top(),false);assert.equal('kneeY' in top(),false);});
+test('foot landmarks expose the support line independently from the knee guard',()=>{assert.ok(Number.isFinite(top().footY));assert.ok(Number.isFinite(top().kneeAngle));assert.equal(top().kneeSupport,false);});
 test('one visible foot is enough in a frontal view',()=>{const p=screenshotPose();p[28].visibility=.01;assert.equal(observePose(p,597/1280).feetVisible,true);});
 test('knees never affect foot support detection',()=>{const p=screenshotPose();p[25].visibility=0;p[26].visibility=0;assert.equal(observePose(p,597/1280).feetVisible,true);});
+test('a clearly folded lower leg is classified as knee support',()=>{const p=screenshotPose();p[27]={x:205/597,y:802/1280,visibility:.9};p[28]={x:390/597,y:802/1280,visibility:.9};const o=observePose(p,597/1280);assert.equal(o.kneeSupport,true);assert.ok(o.kneeAngle<125);});
 test('a foreshortened front-view foot accepts a faint but coherent ankle',()=>{const p=screenshotPose();p[27].visibility=.08;p[28].visibility=.04;assert.equal(observePose(p,597/1280).feetVisible,true);});
 test('the two screenshots show clear shoulder travel',()=>{assert.ok(bottom().y-top().y>.1);});

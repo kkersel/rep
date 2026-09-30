@@ -1,5 +1,6 @@
 export type ProgramDayKind = 'main' | 'light' | 'recovery';
 export type ProgramDayStatus = 'upcoming' | 'completed' | 'failed' | 'skipped';
+export type ProgramDifficulty = 'easy' | 'balanced' | 'intense';
 
 export type ProgramDay = {
   index: number;
@@ -16,6 +17,7 @@ export type Program = {
   id: string;
   baseline: number;
   step: number;
+  difficulty: ProgramDifficulty;
   startDate: string;
   status: 'active' | 'completed';
   workoutStreak: number;
@@ -42,6 +44,41 @@ export const MAIN_LEVELS = [0, 0, 1, 1, 2, 2, 3, 3, 2, 3, 3, 4, 4] as const;
 export const TRAINING_DAYS = MAIN_DAYS;
 export const TRAINING_LEVELS = MAIN_LEVELS;
 
+const EASY_LEVELS = [0, 0, 0, 1, 1, 1, 2, 2, 1, 2, 2, 3, 3] as const;
+const INTENSE_LEVELS = [0, 1, 1, 2, 2, 3, 3, 4, 3, 4, 4, 5, 5] as const;
+
+export const PROGRAM_DIFFICULTIES: readonly {
+  id: ProgramDifficulty;
+  label: string;
+  caption: string;
+  description: string;
+}[] = [
+  { id: 'easy', label: 'Спокойная', caption: 'Плавно', description: 'Меньше прибавка и легче практические дни.' },
+  { id: 'balanced', label: 'Баланс', caption: 'Оптимально', description: 'Ровный рост с привычным темпом восстановления.' },
+  { id: 'intense', label: 'Интенсив', caption: 'Быстрее', description: 'Больше прибавка и объём в лёгкие дни.' },
+];
+
+const difficultyConfig: Record<ProgramDifficulty, { levels: readonly number[]; stepRate: number; lightRatio: number }> = {
+  easy: { levels: EASY_LEVELS, stepRate: .08, lightRatio: .4 },
+  balanced: { levels: MAIN_LEVELS, stepRate: .1, lightRatio: .5 },
+  intense: { levels: INTENSE_LEVELS, stepRate: .15, lightRatio: .6 },
+};
+
+export function isProgramDifficulty(value: unknown): value is ProgramDifficulty {
+  return value === 'easy' || value === 'balanced' || value === 'intense';
+}
+
+export function recommendedProgramDifficulty(reps: number): ProgramDifficulty {
+  const safe = Math.max(1, Math.round(reps));
+  if (safe <= 5) return 'easy';
+  if (safe <= 25) return 'balanced';
+  return 'intense';
+}
+
+export function programDifficultyInfo(difficulty: ProgramDifficulty) {
+  return PROGRAM_DIFFICULTIES.find(item => item.id === difficulty) ?? PROGRAM_DIFFICULTIES[1];
+}
+
 export function localDateKey(value: Date | number | string = new Date()) {
   const date = value instanceof Date ? value : new Date(value);
   const y = date.getFullYear();
@@ -55,23 +92,25 @@ export function addLocalDays(key: string, amount: number) {
   return localDateKey(new Date(y, m - 1, d + amount, 12));
 }
 
-export function createProgram(baseline: number, startDate = localDateKey()): Program {
+export function createProgram(baseline: number, startDate = localDateKey(), difficulty: ProgramDifficulty = 'balanced'): Program {
   const safeBaseline = Math.max(1, Math.min(100, Math.round(baseline)));
-  const step = Math.max(1, Math.round(safeBaseline * 0.1));
+  const config = difficultyConfig[difficulty];
+  const step = Math.max(1, Math.round(safeBaseline * config.stepRate));
   let latestMainTarget = safeBaseline;
   const days: ProgramDay[] = Array.from({ length: 30 }, (_, offset) => {
     const index = offset + 1;
     const mainIndex = MAIN_DAYS.indexOf(index as (typeof MAIN_DAYS)[number]);
     const isLight = LIGHT_DAYS.includes(index as (typeof LIGHT_DAYS)[number]);
     const kind: ProgramDayKind = mainIndex >= 0 ? 'main' : isLight ? 'light' : 'recovery';
-    if (mainIndex >= 0) latestMainTarget = safeBaseline + MAIN_LEVELS[mainIndex] * step;
-    const target = kind === 'main' ? latestMainTarget : kind === 'light' ? Math.max(1, Math.round(latestMainTarget * .5)) : 0;
-    return { index, date: addLocalDays(startDate, offset), kind, level: mainIndex >= 0 ? MAIN_LEVELS[mainIndex] : 0, target, status: 'upcoming' };
+    if (mainIndex >= 0) latestMainTarget = safeBaseline + config.levels[mainIndex] * step;
+    const target = kind === 'main' ? latestMainTarget : kind === 'light' ? Math.max(1, Math.round(latestMainTarget * config.lightRatio)) : 0;
+    return { index, date: addLocalDays(startDate, offset), kind, level: mainIndex >= 0 ? config.levels[mainIndex] : 0, target, status: 'upcoming' };
   });
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     baseline: safeBaseline,
     step,
+    difficulty,
     startDate,
     status: 'active',
     workoutStreak: 0,
@@ -96,8 +135,9 @@ function nextLight(program: Program, afterIndex: number) {
 
 /** Upgrades old persisted programs without discarding recorded results. */
 export function normalizeProgram(program: Program): Program {
-  if (program.days.some(day => day.kind === 'light') && Number.isFinite(program.consecutiveMainFailures)) return program;
-  const fresh = createProgram(program.baseline, program.startDate);
+  const difficulty = isProgramDifficulty(program.difficulty) ? program.difficulty : 'balanced';
+  if (program.days.some(day => day.kind === 'light') && Number.isFinite(program.consecutiveMainFailures)) return { ...program, difficulty };
+  const fresh = createProgram(program.baseline, program.startDate, difficulty);
   const oldResults = new Map(program.days.filter(day => day.actualReps !== undefined).map(day => [day.date, day]));
   fresh.id = program.id;
   fresh.workoutStreak = program.workoutStreak ?? 0;
@@ -109,6 +149,33 @@ export function normalizeProgram(program: Program): Program {
     return old ? { ...day, status: old.status, actualReps: old.actualReps, completedAt: old.completedAt } : day;
   });
   return fresh;
+}
+
+/** Keeps completed history intact and recalculates only the remaining plan. */
+export function changeProgramDifficulty(program: Program, difficulty: ProgramDifficulty): Program {
+  if (program.difficulty === difficulty) return program;
+  const next = clone(program);
+  const config = difficultyConfig[difficulty];
+  next.difficulty = difficulty;
+  next.step = Math.max(1, Math.round(next.baseline * config.stepRate));
+  next.confidentStreak = 0;
+  let latestMainTarget = next.baseline;
+  let mainIndex = 0;
+  for (const day of next.days) {
+    if (day.kind === 'main') {
+      if (day.status === 'upcoming') {
+        day.level = config.levels[mainIndex];
+        day.target = next.baseline + day.level * next.step;
+      }
+      latestMainTarget = day.target;
+      mainIndex += 1;
+      continue;
+    }
+    if (day.kind === 'light' && day.status === 'upcoming') {
+      day.target = Math.max(1, Math.round(latestMainTarget * config.lightRatio));
+    }
+  }
+  return next;
 }
 
 /** Marks elapsed sessions as missed while recovery and light days never break the main streak. */
@@ -181,7 +248,7 @@ export function recordProgramWorkout(program: Program, date: string, reps: numbe
     }
   }
   const light = nextLight(next, day.index);
-  if (light && (!upcoming || light.index < upcoming.index)) light.target = Math.max(1, Math.round(day.target * .5));
+  if (light && (!upcoming || light.index < upcoming.index)) light.target = Math.max(1, Math.round(day.target * difficultyConfig[next.difficulty].lightRatio));
   if (next.consecutiveMainFailures >= 2) {
     const recovery = nextLight(next, day.index);
     if (recovery) { recovery.kind = 'recovery'; recovery.target = 0; }

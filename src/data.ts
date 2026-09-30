@@ -1,9 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createProgram, isProgram, localDateKey, normalizeProgram, reconcileProgram, type Program } from './program';
+import { createProgram, isProgram, localDateKey, normalizeProgram, reconcileProgram, type Program, type ProgramDifficulty } from './program';
+import type { MotivationFrequency, ReminderHour } from './notificationPlan';
 import { legacyBaselineFromValue, migrateSessionValue } from './migrations';
 
 export type SessionKind = 'program' | 'light' | 'free' | 'pvp';
 export type PvpOutcome = 'win' | 'loss' | 'draw';
+export type TechniqueSeverity = 'mild' | 'moderate' | 'severe';
+export type WorkoutTechniqueIssue = {
+  code: string;
+  observation: string;
+  correction: string;
+  severity: TechniqueSeverity;
+};
+export type WorkoutTechniqueAssessment = {
+  score: number | null;
+  verdict: 'good' | 'needs_adjustment' | 'cannot_assess';
+  summary: string;
+  view: 'front' | 'side' | 'diagonal' | 'mixed' | 'unknown';
+  strengths: string[];
+  errors: WorkoutTechniqueIssue[];
+  lessonIds: string[];
+  assessedAt: string;
+};
 export type WorkoutSession = {
   id: string;
   date: string;
@@ -13,13 +31,29 @@ export type WorkoutSession = {
   mode: SessionKind;
   programDay?: number;
   pvpResult?: PvpOutcome;
+  ratingDelta?: number;
+  ratingAfter?: number;
+  eloDelta?: number;
+  eloAfter?: number;
   opponentNickname?: string;
   matchId?: string;
+  technique?: WorkoutTechniqueAssessment;
   synced?: boolean;
 };
 
-export type AppPreferences = { voice: boolean; haptics: boolean; sounds: boolean; privateProfile: boolean };
-export type LocalProfile = { nickname: string; friendCode?: string; userId?: string; preferences: AppPreferences };
+export type AppPreferences = {
+  voice: boolean;
+  haptics: boolean;
+  sounds: boolean;
+  privateProfile: boolean;
+  notificationsEnabled: boolean;
+  workoutReminders: boolean;
+  eveningReminder: boolean;
+  motivationNotifications: boolean;
+  reminderHour: ReminderHour;
+  motivationPerWeek: MotivationFrequency;
+};
+export type LocalProfile = { nickname: string; friendCode?: string; userId?: string; avatarUri?: string; preferences: AppPreferences };
 export type AppSnapshot = { program: Program | null; history: WorkoutSession[]; legacyBaseline: number | null; profile: LocalProfile };
 
 const PROGRAM_STORE = 'rep.program.v2';
@@ -27,7 +61,18 @@ const SESSION_STORE = 'rep.sessions.v2';
 const PROFILE_STORE = 'rep.profile.v1';
 const LEGACY_PLAN_STORE = 'rep.plan.v1';
 const LEGACY_SESSION_STORE = 'rep.sessions.v1';
-export const defaultPreferences: AppPreferences = { voice: true, haptics: true, sounds: true, privateProfile: false };
+export const defaultPreferences: AppPreferences = {
+  voice: true,
+  haptics: true,
+  sounds: true,
+  privateProfile: false,
+  notificationsEnabled: false,
+  workoutReminders: true,
+  eveningReminder: true,
+  motivationNotifications: true,
+  reminderHour: 18,
+  motivationPerWeek: 1,
+};
 
 const safeJson = (raw: string | null) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
 
@@ -68,8 +113,8 @@ export async function clearLocalData() {
   await AsyncStorage.multiRemove([PROGRAM_STORE, SESSION_STORE, PROFILE_STORE, LEGACY_PLAN_STORE, LEGACY_SESSION_STORE]);
 }
 
-export async function startFreshProgram(baseline: number) {
-  const program = createProgram(baseline);
+export async function startFreshProgram(baseline: number, difficulty: ProgramDifficulty = 'balanced') {
+  const program = createProgram(baseline, localDateKey(), difficulty);
   await saveProgram(program);
   return program;
 }

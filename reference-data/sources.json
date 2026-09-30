@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "selectionPolicy": {
+    "score": 10,
+    "requirements": [
+      "qualified or established coaching source",
+      "standard floor push-up is clearly demonstrated",
+      "full body and support points are visible in an approved interval",
+      "at least three uninterrupted repetitions",
+      "adequate lighting and resolution",
+      "no edit inside an approved interval",
+      "neutral head and controlled tempo",
+      "straight head-to-heel body line",
+      "clear top and bottom positions",
+      "camera view is explicitly labeled"
+    ]
+  },
+  "sources": [
+    {"id":"calimove-perfect-pushup","url":"https://www.youtube.com/watch?v=IODxDxX7oi4","localFile":null,"clips":[]},
+    {"id":"fitnessfaqs-common-mistakes","url":"https://www.youtube.com/watch?v=lnR_kb5Wjf8","localFile":null,"clips":[]},
+    {"id":"jeremy-ethier-pushup-strength","url":"https://www.youtube.com/watch?v=Z88Rl5bpnmI","localFile":null,"clips":[]},
+    {"id":"nasm-proper-pushup","url":"https://www.youtube.com/watch?v=WDIpL0pjun0","localFile":null,"clips":[]},
+    {"id":"squat-university-pushups","url":"https://www.youtube.com/watch?v=Yd1grZkAark","localFile":null,"clips":[]}
+  ]
+}

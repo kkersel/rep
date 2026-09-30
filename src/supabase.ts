@@ -2,7 +2,9 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type { Program } from './program';
-import type { WorkoutSession } from './data';
+import type { PvpOutcome, SessionKind, WorkoutSession } from './data';
+import { achievements, ratingDeltaForOutcome, ratingFromHistory, levelForRating, MIN_RATING, START_RATING, type Achievement } from './gamification';
+import { sessionStats } from './statistics';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '';
@@ -25,8 +27,16 @@ export type PvpMatch = {
   winnerId: string | null;
 };
 
-type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'status' | 'ready' | 'checkpoint' | 'heartbeat' | 'leave' | 'finalize' | 'rematch' | 'request_rematch' | 'accept_rematch' | 'decline_rematch' | 'add_friend' | 'add_friend_code';
-export type FriendLeader = { userId: string; nickname: string; wins: number; reps: number; matches: number; best60: number; mainCompleted: number; adherence: number; streak: number };
+type PvpAction = 'create_private' | 'join_private' | 'queue_random' | 'cancel_queue' | 'status' | 'ready' | 'checkpoint' | 'heartbeat' | 'leave' | 'finalize' | 'rematch' | 'request_rematch' | 'accept_rematch' | 'decline_rematch' | 'add_friend' | 'add_friend_code' | 'remove_friend';
+export type FriendLeader = { userId: string; nickname: string; rating: number; level: number; wins: number; reps: number; matches: number; best60: number; mainCompleted: number; adherence: number; streak: number };
+export type FriendProfile = {
+  userId: string;
+  nickname: string;
+  rating: number;
+  level: number;
+  stats: ReturnType<typeof sessionStats>;
+  achievements: Achievement[];
+};
 
 export async function ensureGuest(nickname: string) {
   if (!supabase) return { userId: 'demo-user', friendCode: 'DEMO01' };
@@ -47,7 +57,7 @@ export async function invokePvp(action: PvpAction, payload: Record<string, unkno
   if (!supabase) throw new Error('PvP-сервер ещё не подключён');
   const response = await supabase.functions.invoke('pvp', { body: { action, ...payload } });
   if (response.error) throw response.error;
-  return response.data as { match?: PvpMatch; matchId?: string; code?: string; queued?: boolean; participants?: { user_id: string; nickname: string; score: number }[] };
+  return response.data as { ok?: boolean; match?: PvpMatch; matchId?: string; code?: string; queued?: boolean; participants?: { user_id: string; nickname: string; score: number }[] };
 }
 
 export async function fetchPvpMatch(matchId: string): Promise<PvpMatch> {
@@ -96,7 +106,7 @@ export async function syncTrainingData(program: Program | null, sessions: Workou
   const pending = sessions.filter(item => !item.synced);
   let nextSessions = sessions;
   if (pending.length) {
-    const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.mode === 'pvp' ? `${item.id}:${userId}` : item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null })));
+    const result = await supabase.from('workout_sessions').upsert(pending.map(item => ({ id: item.mode === 'pvp' ? `${item.id}:${userId}` : item.id, user_id: userId, performed_at: item.date, reps: item.reps, seconds: item.seconds, goal: item.goal, mode: item.mode, program_day: item.programDay ?? null, pvp_result: item.pvpResult ?? null, technique: item.technique ?? null })));
     if (result.error) throw result.error;
     const ids = new Set(pending.map(item => item.id));
     nextSessions = sessions.map(item => ids.has(item.id) ? { ...item, synced: true } : item);
@@ -123,7 +133,50 @@ export async function syncTrainingData(program: Program | null, sessions: Workou
       // Session results must still reach the leaderboard if program sync needs a retry.
     }
   }
+  try {
+    const achievementResult = await supabase.from('user_achievements').upsert(achievements(nextSessions, program).map(item => ({
+      user_id: userId,
+      achievement_id: item.id,
+      current: item.current,
+      target: item.target,
+      unlocked_at: item.unlockedAt ?? null,
+      updated_at: new Date().toISOString(),
+    })), { onConflict: 'user_id,achievement_id' });
+    if (achievementResult.error) throw achievementResult.error;
+  } catch {
+    // Older backends may not have the achievements table yet; session sync remains usable.
+  }
   return nextSessions;
+}
+
+export async function fetchFriendProfile(userId: string): Promise<FriendProfile> {
+  if (!supabase) throw new Error('Сервер ещё не подключён');
+  const [profileResult, sessionsResult, achievementsResult] = await Promise.all([
+    supabase.from('profiles').select('user_id,nickname').eq('user_id', userId).single(),
+    supabase.from('workout_sessions').select('id,performed_at,reps,seconds,goal,mode,program_day,pvp_result,technique').eq('user_id', userId).order('performed_at', { ascending: true }),
+    supabase.from('user_achievements').select('achievement_id,current,target,unlocked_at').eq('user_id', userId),
+  ]);
+  if (profileResult.error) throw profileResult.error;
+  if (sessionsResult.error) throw sessionsResult.error;
+  const history: WorkoutSession[] = (sessionsResult.data ?? []).map(item => ({
+    id: item.id,
+    date: item.performed_at,
+    reps: item.reps,
+    seconds: item.seconds,
+    goal: item.goal,
+    mode: item.mode as SessionKind,
+    programDay: item.program_day ?? undefined,
+    pvpResult: (item.pvp_result as PvpOutcome | null) ?? undefined,
+    technique: item.technique ?? undefined,
+    synced: true,
+  }));
+  const stored = new Map((achievementsResult.data ?? []).map(item => [item.achievement_id, item]));
+  const collection = achievements(history, null).map(item => {
+    const remote = stored.get(item.id);
+    return remote ? { ...item, current: remote.current, target: remote.target, unlockedAt: remote.unlocked_at ?? undefined } : item;
+  });
+  const rank = ratingFromHistory(history);
+  return { userId, nickname: profileResult.data.nickname, rating: rank.rating, level: rank.level, stats: sessionStats(history), achievements: collection };
 }
 
 export async function fetchFriendLeaderboard(): Promise<FriendLeader[]> {
@@ -141,23 +194,24 @@ export async function fetchFriendLeaderboard(): Promise<FriendLeader[]> {
   const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - weekday).toISOString();
   const [profilesResult, sessionsResult] = await Promise.all([
     supabase.from('profiles').select('user_id,nickname').in('user_id', userIds),
-    supabase.from('workout_sessions').select('user_id,reps,goal,mode,pvp_result,performed_at').in('user_id', userIds).gte('performed_at', weekStart),
+    supabase.from('workout_sessions').select('user_id,reps,goal,mode,pvp_result,performed_at').in('user_id', userIds).order('performed_at', { ascending: true }),
   ]);
   if (profilesResult.error) throw profilesResult.error;
   if (sessionsResult.error) throw sessionsResult.error;
   const totals = new Map<string, Omit<FriendLeader,'userId'|'nickname'>>();
-  for (const id of userIds) totals.set(id, { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 });
+  const empty=():Omit<FriendLeader,'userId'|'nickname'>=>({ rating: START_RATING, level: levelForRating(START_RATING).level, wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 });
+  for (const id of userIds) totals.set(id, empty());
   for (const item of sessionsResult.data ?? []) {
-    const total = totals.get(item.user_id) ?? { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 };
+    const total = totals.get(item.user_id) ?? empty();
     total.reps += item.reps;
-    if (item.mode === 'pvp') { total.matches += 1; total.best60 = Math.max(total.best60,item.reps); if (item.pvp_result === 'win') total.wins += 1; }
-    if (item.mode === 'program' && item.reps >= item.goal) total.mainCompleted += 1;
+    if (item.mode === 'pvp') { total.matches += 1; total.best60 = Math.max(total.best60,item.reps); if (item.pvp_result === 'win') total.wins += 1; total.rating = Math.max(MIN_RATING,total.rating+ratingDeltaForOutcome(item.pvp_result)); total.level=levelForRating(total.rating).level; }
+    if (+new Date(item.performed_at)>=+new Date(weekStart)&&item.mode === 'program' && item.reps >= item.goal) total.mainCompleted += 1;
     total.adherence = Math.min(100,Math.round(total.mainCompleted/3*100));
     total.streak = total.mainCompleted;
     totals.set(item.user_id, total);
   }
-  return (profilesResult.data ?? []).map(item => ({ userId: item.user_id, nickname: item.nickname, ...(totals.get(item.user_id) ?? { wins: 0, reps: 0, matches: 0, best60: 0, mainCompleted: 0, adherence: 0, streak: 0 }) }))
-    .sort((a, b) => b.wins - a.wins || b.reps - a.reps || a.nickname.localeCompare(b.nickname, 'ru'));
+  return (profilesResult.data ?? []).map(item => ({ userId: item.user_id, nickname: item.nickname, ...(totals.get(item.user_id) ?? empty()) }))
+    .sort((a, b) => b.rating - a.rating || b.wins - a.wins || a.nickname.localeCompare(b.nickname, 'ru'));
 }
 
 export async function broadcastScore(channel: RealtimeChannel | null, score: number, sequence: number) {

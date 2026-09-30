@@ -3,7 +3,7 @@
     "name": "Rep — счётчик отжиманий",
     "slug": "rep",
     "scheme": "rep",
-    "version": "1.3.2",
+    "version": "1.3.12",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.rep.pushups",
-      "versionCode": 23
+      "versionCode": 33
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,7 +38,23 @@
       ],
       "expo-router",
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#0A84FF",
+          "defaultChannel": "training-reminders"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Разрешить Rep выбрать фото профиля или видео техники?",
+          "cameraPermission": "Разрешить Rep снять короткое видео для AI-разбора техники?"
+        }
+      ]
     ]
   }
 }

@@ -1,59 +1,82 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useApp } from '../../state/AppContext';
-import { nextProgramTraining, programDayNumber, programSummary, todayProgramDay } from '../../program';
-import { Card, colors, Loading, ProgressBar, Screen, SectionLabel } from '../../ui';
+import { nextProgramTraining, programDayNumber, todayProgramDay } from '../../program';
+import { Card, colors, Loading, Screen, SectionLabel } from '../../ui';
 
 const formatDate = (key: string) => new Date(`${key}T12:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+const techniqueVideo = require('../../../assets/pushup-technique-gym-seamless-60fps.mp4');
+
+function TechniqueCard() {
+  const player = useVideoPlayer(techniqueVideo, value => {
+    value.loop = true;
+    value.muted = true;
+  });
+  useFocusEffect(useCallback(() => {
+    player.play();
+    return () => player.pause();
+  }, [player]));
+
+  return <Card style={s.technique}>
+    <VideoView
+      accessibilityLabel="Анимация правильной техники отжимания"
+      allowsPictureInPicture={false}
+      contentFit="contain"
+      nativeControls={false}
+      player={player}
+      playsInline
+      style={s.techniqueVideo}
+    />
+  </Card>;
+}
 
 export default function HomeScreen() {
-  const { loaded, program, history, leaders, gamification } = useApp();
+  const { loaded, program } = useApp();
+
   if (!loaded || !program) return <Loading/>;
-  const today = todayProgramDay(program), next = nextProgramTraining(program), summary = programSummary(program);
-  const trainable = today && (today.kind === 'main' || today.kind === 'light') && today.status === 'upcoming';
-  const weekStart = new Date(); weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7)); weekStart.setHours(0,0,0,0);
-  const weekMain = history.filter(item => item.mode === 'program' && +new Date(item.date) >= weekStart.getTime() && item.reps >= item.goal).length;
-  const day = programDayNumber(program);
-  const startToday = () => trainable
-    ? router.push({ pathname: '/session', params: { kind: today.kind === 'main' ? 'program' : 'light', goal: today.target, day: today.index } })
-    : router.push('/program');
-  const title = today?.status === 'completed' ? 'Готово на сегодня' : trainable ? (today.kind === 'main' ? 'Основная тренировка' : 'Лёгкий день') : 'Восстановление';
-  const detail = trainable ? `${today.target} отжиманий` : next ? `Следующая тренировка ${formatDate(next.date)}` : 'Цикл завершён';
-  return <Screen>
-    <Pressable onPress={startToday} style={({ pressed }) => pressed && s.pressed}>
-      <Card style={s.today}>
-        <View style={s.todayTop}><Text style={s.eyebrow}>День {day} из 30</Text><Text style={s.arrow}>→</Text></View>
-        <Text style={s.todayTitle}>{title}</Text>
-        <Text style={s.todayDetail}>{detail}</Text>
-        <View style={s.week}><Text style={s.weekLabel}>Основные на этой неделе</Text><Text style={s.weekValue}>{Math.min(weekMain,3)} / 3</Text></View>
-        <ProgressBar value={weekMain / 3}/>
+  const today=todayProgramDay(program),next=nextProgramTraining(program),day=programDayNumber(program);
+  const trainable=today&&(today.kind==='main'||today.kind==='light')&&today.status==='upcoming';
+
+  const startToday=()=>trainable
+    ?router.push({pathname:'/session',params:{kind:today.kind==='main'?'program':'light',goal:today.target,day:today.index}})
+    :router.push('/program');
+  const todayTitle=today?.status==='completed'?'Выполнено':trainable?(today.kind==='main'?'Основная':'Лёгкая'):'Восстановление';
+  const todayDetail=trainable?`${today.target} повторов`:next?`Следующая ${formatDate(next.date)}`:'Цикл завершён';
+
+  return <View style={s.root}>
+    <Screen style={s.content}>
+      <Pressable onPress={() => router.push('/coach')} style={({pressed})=>pressed&&s.pressed}><Card style={s.coachHero}>
+        <View style={s.coachIcon}><Ionicons color="#fff" name="sparkles" size={24}/></View>
+        <Text style={s.coachEyebrow}>AI-ТРЕНЕР</Text>
+        <Text style={s.coachTitle}>Разбери свою технику</Text>
+        <Text style={s.coachDetail}>Сними короткий подход. Тренер найдёт главную ошибку и подскажет, что исправить.</Text>
+        <View style={s.coachAction}><Text style={s.coachActionText}>Открыть тренера</Text><Ionicons color="#fff" name="arrow-forward" size={18}/></View>
+      </Card></Pressable>
+
+      <SectionLabel>Тренировки</SectionLabel>
+      <Card style={s.trainingList}>
+        <Pressable onPress={startToday} style={({pressed})=>[s.training,pressed&&s.pressed]}><View style={s.trainingIcon}><Ionicons color={colors.blue} name="calendar" size={20}/></View><View style={s.trainingInfo}><Text style={s.trainingTitle}>{todayTitle}</Text><Text style={s.trainingDetail}>День {day} · {todayDetail}</Text></View><Ionicons color={colors.tertiary} name="chevron-forward" size={20}/></Pressable>
+        <Pressable onPress={()=>router.push({pathname:'/session',params:{kind:'free',goal:0}})} style={({pressed})=>[s.training,s.line,pressed&&s.pressed]}><View style={s.trainingIcon}><Ionicons color={colors.blue} name="infinite" size={22}/></View><View style={s.trainingInfo}><Text style={s.trainingTitle}>Свободная</Text><Text style={s.trainingDetail}>Без цели и таймера</Text></View><Ionicons color={colors.tertiary} name="chevron-forward" size={20}/></Pressable>
+        <Pressable onPress={()=>router.push('/pvp')} style={({pressed})=>[s.training,s.line,pressed&&s.pressed]}><View style={s.trainingIcon}><Ionicons color={colors.blue} name="trophy" size={20}/></View><View style={s.trainingInfo}><Text style={s.trainingTitle}>PvP</Text><Text style={s.trainingDetail}>Создать игру или найти соперника</Text></View><Ionicons color={colors.tertiary} name="chevron-forward" size={20}/></Pressable>
       </Card>
+
+      <SectionLabel>Техника</SectionLabel>
+      <TechniqueCard/>
+    </Screen>
+
+    <Pressable accessibilityRole="button" accessibilityLabel="Открыть AI-тренера" onPress={()=>router.push('/coach')} style={({pressed})=>[s.coachButton,pressed&&s.coachButtonPressed]}>
+      <Ionicons color="#fff" name="sparkles" size={21}/><Text style={s.coachButtonText}>AI-тренер</Text>
     </Pressable>
-
-    <SectionLabel>Тренировка</SectionLabel>
-    <View style={s.modeRow}>
-      <Pressable style={s.modePress} onPress={() => router.push({ pathname: '/session', params: { kind: 'free', goal: 0 } })}>
-        <Card style={s.mode}><Text style={s.modeMark}>∞</Text><Text style={s.modeTitle}>Свободная</Text><Text style={s.modeDetail}>Без цели</Text></Card>
-      </Pressable>
-      <Pressable style={s.modePress} onPress={() => router.push('/pvp')}>
-        <Card style={s.mode}><Text style={[s.modeMark,{color:colors.orange}]}>60</Text><Text style={s.modeTitle}>PvP</Text><Text style={s.modeDetail}>Один на один</Text></Card>
-      </Pressable>
-    </View>
-
-    <SectionLabel>Прогресс</SectionLabel>
-    <Pressable onPress={() => router.push('/program')}><Card style={s.program}>
-      <View><Text style={s.programValue}>{summary.completed} из {summary.total}</Text><Text style={s.programLabel}>основных тренировок</Text></View>
-      <View style={s.level}><Text style={s.levelText}>Ур. {gamification.level}</Text></View>
-    </Card></Pressable>
-
-    {leaders.filter(item=>item.userId!==undefined).length > 1 ? <><SectionLabel>Друзья</SectionLabel><Card style={s.activity}>{leaders.filter(item=>item.userId).slice(0,3).map((item,index)=><View key={item.userId} style={[s.friend,index>0&&s.line]}><View style={s.avatar}><Text style={s.avatarText}>{item.nickname.slice(0,2).toUpperCase()}</Text></View><Text style={s.friendName}>{item.nickname}</Text><Text style={s.friendValue}>{item.wins} побед</Text></View>)}</Card></> : null}
-    {history.length === 0 ? <Text style={s.context}>Начни с сегодняшней цели. Программа сама подстроит следующую основную тренировку.</Text> : null}
-  </Screen>;
+  </View>;
 }
 
 const s=StyleSheet.create({
-  pressed:{opacity:.72},today:{minHeight:238,padding:22},todayTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},eyebrow:{fontSize:13,fontWeight:'700',color:colors.secondary},arrow:{fontSize:24,color:colors.blue},todayTitle:{fontSize:34,lineHeight:40,fontWeight:'800',letterSpacing:-1.2,marginTop:24},todayDetail:{fontSize:18,color:colors.secondary,marginTop:6},week:{flexDirection:'row',justifyContent:'space-between',marginTop:32,marginBottom:8},weekLabel:{fontSize:12,color:colors.secondary},weekValue:{fontSize:12,fontWeight:'700'},
-  modeRow:{flexDirection:'row',gap:10},modePress:{flex:1},mode:{minHeight:148,justifyContent:'space-between'},modeMark:{fontSize:30,fontWeight:'800',color:colors.blue},modeTitle:{fontSize:18,fontWeight:'700'},modeDetail:{fontSize:13,color:colors.secondary},program:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},programValue:{fontSize:25,fontWeight:'800'},programLabel:{fontSize:13,color:colors.secondary,marginTop:3},level:{paddingHorizontal:12,paddingVertical:8,borderRadius:12,backgroundColor:colors.blueSoft},levelText:{color:colors.blue,fontWeight:'700'},
-  activity:{paddingVertical:2},friend:{height:62,flexDirection:'row',alignItems:'center'},line:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:colors.line},avatar:{width:38,height:38,borderRadius:13,backgroundColor:colors.blueSoft,alignItems:'center',justifyContent:'center'},avatarText:{fontSize:12,fontWeight:'800',color:colors.blue},friendName:{flex:1,fontSize:15,fontWeight:'600',marginLeft:11},friendValue:{fontSize:13,color:colors.secondary},context:{fontSize:13,lineHeight:19,color:colors.secondary,textAlign:'center',marginHorizontal:28,marginTop:24}
+  root:{flex:1,backgroundColor:colors.bg},content:{paddingBottom:210},pressed:{opacity:.62},line:{borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:colors.line},
+  coachHero:{minHeight:258,padding:22,backgroundColor:'#111318',borderColor:'#111318'},coachIcon:{width:46,height:46,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors.blue},coachEyebrow:{fontSize:11,fontWeight:'800',letterSpacing:1.3,color:'#8EBEFF',marginTop:19},coachTitle:{fontSize:29,lineHeight:33,fontWeight:'800',letterSpacing:-.8,color:'#fff',marginTop:7},coachDetail:{fontSize:14,lineHeight:20,color:'#A7A7AC',marginTop:9,maxWidth:310},coachAction:{height:42,alignSelf:'flex-start',borderRadius:15,paddingHorizontal:14,marginTop:18,backgroundColor:colors.blue,flexDirection:'row',alignItems:'center',gap:8},coachActionText:{color:'#fff',fontSize:13,fontWeight:'800'},
+  trainingList:{paddingVertical:2},training:{minHeight:68,flexDirection:'row',alignItems:'center'},trainingIcon:{width:40,height:40,borderRadius:13,backgroundColor:colors.blueSoft,alignItems:'center',justifyContent:'center'},trainingInfo:{flex:1,marginLeft:12},trainingTitle:{fontSize:15,fontWeight:'700'},trainingDetail:{fontSize:11,color:colors.secondary,marginTop:3},
+  technique:{padding:0,overflow:'hidden',aspectRatio:16/9},techniqueVideo:{width:'100%',height:'100%',backgroundColor:'#fff'},
+  coachButton:{position:'absolute',left:'50%',bottom:18,width:164,height:58,marginLeft:-82,borderRadius:29,backgroundColor:colors.blue,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:9,shadowColor:'#006FE6',shadowOpacity:.3,shadowRadius:15,shadowOffset:{width:0,height:8},elevation:9},coachButtonPressed:{opacity:.82,transform:[{scale:.97}]},coachButtonText:{color:'#fff',fontSize:16,fontWeight:'800'},
 });

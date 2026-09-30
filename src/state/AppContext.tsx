@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { clearLocalData, defaultPreferences, loadSnapshot, saveHistory, saveProfile, saveProgram, startFreshProgram, type LocalProfile, type WorkoutSession } from '../data';
 import { gamificationSummary } from '../gamification';
-import { localDateKey, recordProgramWorkout, type Program } from '../program';
+import { changeProgramDifficulty as applyProgramDifficulty, localDateKey, recordProgramWorkout, type Program, type ProgramDifficulty } from '../program';
+import { syncNotificationSchedule } from '../notificationService';
 import { fetchFriendLeaderboard, isSupabaseConfigured, syncTrainingData, type FriendLeader } from '../supabase';
 
 type AppContextValue = {
@@ -14,8 +15,9 @@ type AppContextValue = {
   leaders: FriendLeader[];
   gamification: ReturnType<typeof gamificationSummary>;
   refreshLeaders: () => Promise<void>;
-  createProgram: (baseline: number) => Promise<void>;
-  restartProgram: (baseline: number) => Promise<void>;
+  createProgram: (baseline: number, difficulty?: ProgramDifficulty) => Promise<void>;
+  restartProgram: (baseline: number, difficulty?: ProgramDifficulty) => Promise<void>;
+  changeProgramDifficulty: (difficulty: ProgramDifficulty) => Promise<void>;
   recordSession: (session: WorkoutSession) => Promise<void>;
   updateProfile: (profile: LocalProfile) => Promise<void>;
   resetData: () => Promise<void>;
@@ -48,6 +50,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [program, history, profile.userId]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    const timer = setTimeout(() => { void syncNotificationSchedule(program, profile.preferences).catch(() => {}); }, 250);
+    return () => clearTimeout(timer);
+  }, [loaded, program, profile.preferences]);
+
   const refreshLeaders = useCallback(async () => {
     if (!isSupabaseConfigured || !profile.userId) return;
     try {
@@ -62,11 +70,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [refreshLeaders, history]);
 
-  const create = useCallback(async (baseline: number) => {
-    const next = await startFreshProgram(baseline);
+  const create = useCallback(async (baseline: number, difficulty: ProgramDifficulty = 'balanced') => {
+    const next = await startFreshProgram(baseline, difficulty);
     setProgram(next);
     setError('');
   }, []);
+
+  const changeDifficulty = useCallback(async (difficulty: ProgramDifficulty) => {
+    if (!program) return;
+    const next = applyProgramDifficulty(program, difficulty);
+    await saveProgram(next);
+    setProgram(next);
+    setError('');
+  }, [program]);
 
   const recordSession = useCallback(async (session: WorkoutSession) => {
     const nextHistory = [session, ...history.filter(item => item.id !== session.id)];
@@ -102,10 +118,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppContextValue>(() => ({
     loaded, program, history, profile, suggestedBaseline, error, leaders, gamification,
-    createProgram: create, restartProgram: create, recordSession, updateProfile,
+    createProgram: create, restartProgram: create, changeProgramDifficulty: changeDifficulty, recordSession, updateProfile,
     refreshLeaders, resetData,
     clearError: () => setError(''),
-  }), [loaded, program, history, profile, suggestedBaseline, error, leaders, gamification, create, recordSession, updateProfile, refreshLeaders, resetData]);
+  }), [loaded, program, history, profile, suggestedBaseline, error, leaders, gamification, create, changeDifficulty, recordSession, updateProfile, refreshLeaders, resetData]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

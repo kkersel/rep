@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createProgram, LIGHT_DAYS, localDateKey, MAIN_DAYS, programSummary, reconcileProgram, recordProgramWorkout, RECOVERY_DAYS } from '../src/program.ts';
+import { changeProgramDifficulty, createProgram, LIGHT_DAYS, localDateKey, MAIN_DAYS, programSummary, recommendedProgramDifficulty, reconcileProgram, recordProgramWorkout, RECOVERY_DAYS } from '../src/program.ts';
 
 test('builds 30 days in a 3 main, 2 light and 2 recovery weekly rhythm', () => {
   const program=createProgram(1,'2026-09-01');
@@ -18,6 +18,35 @@ test('scales main goals and light sessions are half of the current goal',()=>{
  assert.deepEqual(p.days.filter(d=>d.kind==='main').map(d=>d.target),[10,10,11,11,12,12,13,13,12,13,13,14,14]);
  assert.equal(p.days[1].target,5);assert.equal(p.days[4].target,5);assert.equal(p.days[29].target,7);
  const p20=createProgram(20,'2026-09-01');assert.deepEqual(p20.days.filter(d=>d.kind==='main').map(d=>d.target),[20,20,22,22,24,24,26,26,24,26,26,28,28]);
+});
+
+test('recommends a difficulty from the current comfortable result',()=>{
+ assert.equal(recommendedProgramDifficulty(1),'easy');
+ assert.equal(recommendedProgramDifficulty(5),'easy');
+ assert.equal(recommendedProgramDifficulty(6),'balanced');
+ assert.equal(recommendedProgramDifficulty(25),'balanced');
+ assert.equal(recommendedProgramDifficulty(26),'intense');
+});
+
+test('difficulty presets adapt progression and light-day volume',()=>{
+ const easy=createProgram(10,'2026-09-01','easy');
+ assert.deepEqual(easy.days.filter(d=>d.kind==='main').map(d=>d.target),[10,10,10,11,11,11,12,12,11,12,12,13,13]);
+ assert.equal(easy.days[1].target,4);
+ const intense=createProgram(10,'2026-09-01','intense');
+ assert.deepEqual(intense.days.filter(d=>d.kind==='main').map(d=>d.target),[10,12,12,14,14,16,16,18,16,18,18,20,20]);
+ assert.equal(intense.days[1].target,6);
+});
+
+test('changing difficulty preserves completed days and recalculates upcoming goals',()=>{
+ let program=createProgram(10,'2026-09-01','balanced');
+ program=recordProgramWorkout(program,'2026-09-01',10);
+ const changed=changeProgramDifficulty(program,'intense');
+ assert.equal(changed.difficulty,'intense');
+ assert.equal(changed.days[0].status,'completed');
+ assert.equal(changed.days[0].actualReps,10);
+ assert.equal(changed.days[0].target,10);
+ assert.equal(changed.days[1].target,6);
+ assert.equal(changed.days[3].target,12);
 });
 
 test('two confident main workouts accelerate only the next main target',()=>{
