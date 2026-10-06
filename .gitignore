@@ -61,3 +61,7 @@ supabase/.temp/
 /reference-data/traces/
 /reference-data/metadata.ndjson
 /.venv-reference/
+
+# Browser verification artifacts and temporary working files
+/.playwright-cli/
+/tmp/
